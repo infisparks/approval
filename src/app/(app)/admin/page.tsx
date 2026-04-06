@@ -5,22 +5,21 @@ import {
   CheckCircle2, RotateCcw, FileText, Download, 
   Building2, Shapes, AppWindow, Clock
 } from 'lucide-react';
-import Select, { MultiValue } from 'react-select';
+import Select from 'react-select';
 import makeAnimated from 'react-select/animated';
 import AppShell from '@/components/AppShell';
 import { 
   getAdminStats, getInstitutes, getDepartments, getCells 
 } from '@/lib/api';
-import { ApprovalRequest, Institute, Department, Cell } from '@/lib/types';
+import { ApprovalRequest } from '@/lib/types';
 import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { DatePickerWithRange } from '@/components/DateRangePicker';
 import { DateRange } from 'react-day-picker';
 import { subDays, startOfDay, endOfDay } from 'date-fns';
+import jsPDF from 'jspdf';
 
 const animatedComponents = makeAnimated();
-
-// ─── Custom Select Styles ──────────────────────────────────────────────────
 
 const selectStyles = {
   control: (base: any, state: any) => ({
@@ -64,24 +63,19 @@ const selectStyles = {
   })
 };
 
-// ─── Main Admin Page ────────────────────────────────────────────────────────
-
 export default function AdminDashboard() {
   const { profile, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  // Filter States
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: subDays(new Date(), 7),
     to: new Date()
   });
   
-  // React-Select values
   const [selInstitutes, setSelInstitutes] = useState<any[]>([]);
   const [selDepartments, setSelDepartments] = useState<any[]>([]);
   const [selCells, setSelCells] = useState<any[]>([]);
 
-  // Resource States
   const [institutes, setInstitutes] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
   const [cells, setCells] = useState<any[]>([]);
@@ -105,7 +99,6 @@ export default function AdminDashboard() {
         setDepartments(dept.map(d => ({ value: d.id, label: d.name })));
         setCells(cl.map(c => ({ value: c.id, label: c.name })));
         
-        // Initial Fetch
         const initBatch = await getAdminStats({ 
           startDate: dateRange?.from ? startOfDay(dateRange.from).toISOString() : undefined, 
           endDate: dateRange?.to ? endOfDay(dateRange.to).toISOString() : undefined
@@ -138,13 +131,13 @@ export default function AdminDashboard() {
     }
   };
 
-
+  const filteredRequests = requests.filter(r => ['approved', 'reverted', 'pending'].includes(r.status));
 
   const stats = {
-    total: requests.length,
-    approved: requests.filter(r => r.status === 'approved').length,
-    reverted: requests.filter(r => r.status === 'reverted').length,
-    pending: requests.filter(r => r.status === 'pending').length
+    total: filteredRequests.length,
+    approved: filteredRequests.filter(r => r.status === 'approved').length,
+    reverted: filteredRequests.filter(r => r.status === 'reverted').length,
+    pending: filteredRequests.filter(r => r.status === 'pending').length
   };
 
   if (authLoading || (profile && (profile.designations?.rank ?? 0) < 4)) {
@@ -154,7 +147,6 @@ export default function AdminDashboard() {
   return (
     <AppShell title="Internal Oversight Dashboard">
       <div style={{ marginBottom: 32 }}>
-        {/* Header Hero */}
         <div style={{ 
           background: 'linear-gradient(135deg, var(--midnight), var(--navy-light))',
           borderRadius: 24, padding: '40px', color: '#fff', marginBottom: 28,
@@ -174,7 +166,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Dynamic Filter Section */}
         <div style={{ 
           background: '#fff', borderRadius: 20, padding: '28px', 
           border: '1px solid var(--border)', boxShadow: '0 8px 30px rgba(0,0,0,0.03)',
@@ -253,12 +244,8 @@ export default function AdminDashboard() {
           </button>
         </div>
 
-        {/* Executive Stats */}
         <div className="stats-grid" style={{ marginBottom: 40, gap: 24 }}>
-          <div style={{ 
-            background: '#fff', borderRadius: 20, padding: 24, border: '1px solid var(--border)',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.02)', position: 'relative'
-          }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 24, border: '1px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', position: 'relative' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <span style={{ fontSize: 11, color: 'var(--slate)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1 }}>Throughput</span>
               <FileText size={20} color="var(--midnight)" />
@@ -267,11 +254,7 @@ export default function AdminDashboard() {
             <div style={{ fontSize: 12, color: 'var(--slate)', marginTop: 8, fontWeight: 600 }}>Total Processed</div>
           </div>
           
-          <div style={{ 
-            borderRadius: 20, padding: 24, border: '1px solid var(--emerald-light)',
-            background: 'linear-gradient(to bottom, #ffffff, rgba(16,185,129,0.03))', 
-            boxShadow: '0 4px 20px rgba(0,0,0,0.02)'
-          }}>
+          <div style={{ borderRadius: 20, padding: 24, border: '1px solid var(--emerald-light)', background: 'linear-gradient(to bottom, #ffffff, rgba(16,185,129,0.03))', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <span style={{ fontSize: 11, color: 'var(--emerald)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1 }}>Approved</span>
               <CheckCircle2 size={20} color="var(--emerald)" />
@@ -280,11 +263,7 @@ export default function AdminDashboard() {
             <div style={{ fontSize: 12, color: 'var(--emerald)', marginTop: 8, fontWeight: 600 }}>Final Authorization</div>
           </div>
 
-          <div style={{ 
-            borderRadius: 20, padding: 24, border: '1px solid var(--gold-light)',
-            background: 'linear-gradient(to bottom, #ffffff, rgba(245,158,11,0.03))', 
-            boxShadow: '0 4px 20px rgba(0,0,0,0.02)'
-          }}>
+          <div style={{ borderRadius: 20, padding: 24, border: '1px solid var(--gold-light)', background: 'linear-gradient(to bottom, #ffffff, rgba(245,158,11,0.03))', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <span style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1 }}>Reverted</span>
               <RotateCcw size={20} color="var(--gold)" />
@@ -293,11 +272,7 @@ export default function AdminDashboard() {
             <div style={{ fontSize: 12, color: 'var(--gold)', marginTop: 8, fontWeight: 600 }}>Action Corrected</div>
           </div>
 
-          <div style={{ 
-            borderRadius: 20, padding: 24, border: '1px solid var(--rose-light)',
-            background: 'linear-gradient(to bottom, #ffffff, rgba(244,63,94,0.03))', 
-            boxShadow: '0 4px 20px rgba(0,0,0,0.02)'
-          }}>
+          <div style={{ borderRadius: 20, padding: 24, border: '1px solid var(--rose-light)', background: 'linear-gradient(to bottom, #ffffff, rgba(244,63,94,0.03))', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <span style={{ fontSize: 11, color: 'var(--rose)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1 }}>Active</span>
               <Clock size={20} color="var(--rose)" />
@@ -307,7 +282,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Result Table Section */}
         <div style={{ background: '#fff', borderRadius: 24, border: '1px solid var(--border)', overflow: 'hidden', boxShadow: '0 10px 40px rgba(0,0,0,0.04)' }}>
           <div style={{ padding: '24px 32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fcfcfd' }}>
             <div>
@@ -319,7 +293,7 @@ export default function AdminDashboard() {
                 onClick={() => {
                   const csv = [
                     ['ID', 'Title', 'Requester', 'Institute', 'Department', 'Amount', 'Status', 'Date'],
-                    ...requests.map(r => [
+                    ...filteredRequests.map(r => [
                       r.id.slice(-6),
                       r.title,
                       r.profiles?.full_name,
@@ -329,72 +303,72 @@ export default function AdminDashboard() {
                       r.status,
                       new Date(r.created_at).toLocaleDateString()
                     ])
-                  ].map(e => e.join(",")).join("\n");
+                  ].map(e => e.map(cell => `"${cell}"`).join(",")).join("\n");
                   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                   const url = URL.createObjectURL(blob);
                   const link = document.createElement("a");
                   link.setAttribute("href", url);
-                  link.setAttribute("download", `AIKTC_Report_${new Date().toISOString().split('T')[0]}.csv`);
+                  link.setAttribute("download", `AIKTC_Executive_Report_${new Date().toISOString().split('T')[0]}.csv`);
                   document.body.appendChild(link);
                   link.click();
                   document.body.removeChild(link);
                 }}
-                className="btn btn-outline" style={{ gap: 8, height: 40, borderRadius: 10, borderColor: '#e2e8f0', fontSize: 12, fontWeight: 700 }}
+                className="btn btn-outline" style={{ gap: 8, height: 40, borderRadius: 10, borderColor: '#e2e8f0', fontSize: 11, fontWeight: 800 }}
               >
                 <Download size={14} /> EXCEL EXPORT
               </button>
               
               <button 
                 onClick={async () => {
-                  const pdf = new jsPDF('p', 'pt', 'a4');
-                  const total = requests.reduce((sum, r) => sum + (r.has_amount ? (r.amount || 0) : 0), 0);
+                  const doc = new jsPDF('p', 'pt', 'a4');
+                  const total = filteredRequests.reduce((sum, r) => sum + (r.has_amount ? (r.amount || 0) : 0), 0);
                   
-                  pdf.setFontSize(22);
-                  pdf.setTextColor(15, 23, 42); // Midnight
-                  pdf.text('INSTITUTIONAL PERFORMANCE REPORT', 40, 60);
+                  doc.setFontSize(20);
+                  doc.setTextColor(15, 23, 42); 
+                  doc.text('INSTITUTIONAL PERFORMANCE REPORT', 40, 60);
                   
-                  pdf.setFontSize(10);
-                  pdf.setTextColor(100, 116, 139); // Slate
-                  pdf.text(`AIKTC Cluster Administrative Oversight • Generated: ${new Date().toLocaleString()}`, 40, 80);
+                  doc.setFontSize(10);
+                  doc.setTextColor(100, 116, 139);
+                  doc.text(`AIKTC Cluster Administrative Oversight • Generated: ${new Date().toLocaleString()}`, 40, 80);
                   
                   let y = 120;
-                  pdf.setFillColor(248, 250, 252);
-                  pdf.rect(40, y - 15, 515, 25, 'F');
-                  pdf.setTextColor(15, 23, 42);
-                  pdf.setFont('helvetica', 'bold');
-                  pdf.text('ID', 45, y);
-                  pdf.text('REQUEST TITLE', 100, y);
-                  pdf.text('REQUESTER', 280, y);
-                  pdf.text('STATUS', 420, y);
-                  pdf.text('AMOUNT', 500, y);
+                  doc.setFillColor(248, 250, 252);
+                  doc.rect(40, y - 15, 515, 25, 'F');
+                  doc.setTextColor(15, 23, 42);
+                  doc.setFont('helvetica', 'bold');
+                  doc.text('ID', 45, y);
+                  doc.text('REQUEST TITLE', 100, y);
+                  doc.text('REQUESTER', 280, y);
+                  doc.text('STATUS', 420, y);
+                  doc.text('AMOUNT', 500, y);
                   
                   y += 25;
-                  pdf.setFont('helvetica', 'normal');
-                  pdf.setFontSize(9);
+                  doc.setFont('helvetica', 'normal');
+                  doc.setFontSize(9);
                   
-                  requests.forEach((r, i) => {
+                  filteredRequests.forEach((r) => {
                     if (y > 780) {
-                      pdf.addPage();
+                      doc.addPage();
                       y = 60;
                     }
-                    pdf.text(r.id.slice(-6), 45, y);
-                    pdf.text(r.title.slice(0, 30) + (r.title.length > 30 ? '...' : ''), 100, y);
-                    pdf.text(r.profiles?.full_name?.slice(0, 20) || 'Unknown', 280, y);
-                    pdf.text(r.status.toUpperCase(), 420, y);
-                    pdf.text(`INR ${r.has_amount ? r.amount?.toLocaleString() : 0}`, 500, y);
+                    doc.text(r.id.slice(-6).toUpperCase(), 45, y);
+                    doc.text(r.title.slice(0, 30) + (r.title.length > 30 ? '...' : ''), 100, y);
+                    doc.text(r.profiles?.full_name?.slice(0, 20) || 'Unknown', 280, y);
+                    doc.text(r.status === 'pending' ? 'ACTIVE' : r.status.toUpperCase(), 420, y);
+                    doc.text(`INR ${r.has_amount ? r.amount?.toLocaleString() : 0}`, 500, y);
                     y += 20;
-                    pdf.setDrawColor(241, 245, 249);
-                    pdf.line(40, y - 5, 555, y - 5);
+                    doc.setDrawColor(241, 245, 249);
+                    doc.line(40, y - 5, 555, y - 5);
                   });
                   
-                  y += 20;
-                  pdf.setFontSize(14);
-                  pdf.setFont('helvetica', 'bold');
-                  pdf.text(`TOTAL FINANCIAL OUTLAY: INR ${total.toLocaleString()}`, 40, y);
+                  y += 30;
+                  doc.setFontSize(12);
+                  doc.setFont('helvetica', 'bold');
+                  doc.text(`TOTAL FINANCIAL DISBURSEMENT: INR ${total.toLocaleString()}`, 40, y);
                   
-                  pdf.save(`AIKTC_Executive_Report_${Date.now()}.pdf`);
+                  doc.save(`AIKTC_Executive_Summary_${Date.now()}.pdf`);
                 }}
-                className="btn-premium" style={{ gap: 8, height: 40, borderRadius: 10, fontSize: 12, fontWeight: 700, padding: '0 16px' }}
+                className="btn-premium" style={{ gap: 8, height: 40, borderRadius: 10, fontSize: 11, fontWeight: 800, padding: '0 16px' }}
               >
                 <FileText size={14} /> PDF SUMMARY
               </button>
@@ -403,13 +377,13 @@ export default function AdminDashboard() {
           
           {loading ? (
             <div style={{ padding: 100, textAlign: 'center' }}><div className="loading-spinner" /></div>
-          ) : requests.length === 0 ? (
+          ) : filteredRequests.length === 0 ? (
             <div style={{ padding: 100, textAlign: 'center', color: 'var(--slate-light)' }}>
               <div style={{ width: 80, height: 80, borderRadius: 20, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
                 <Search size={32} color="#cbd5e1" />
               </div>
-              <h4 style={{ color: 'var(--midnight)', fontSize: 16, margin: '0 0 4px' }}>No Data Signal Detected</h4>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 500 }}>Adjust your parameters to expand discovery scope</p>
+              <h4 style={{ color: 'var(--midnight)', fontSize: 16, margin: '0 0 4px' }}>No Pertinent Signals Detected</h4>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 500 }}>All requests currently outside oversight scope</p>
             </div>
           ) : (
             <div className="table-wrapper" style={{ overflowX: 'auto' }}>
@@ -425,14 +399,12 @@ export default function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {requests
-                    .filter(r => ['approved', 'reverted', 'pending'].includes(r.status))
-                    .map(r => (
+                  {filteredRequests.map(r => (
                     <tr key={r.id} style={{ borderBottom: '1px solid #f8fafc', transition: 'background 0.2s', cursor: 'default' }}>
                       <td style={{ padding: '20px 32px' }}>
                         <div style={{ fontWeight: 800, color: 'var(--midnight)', fontSize: 15 }}>{r.title}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                          <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 800, background: 'rgba(59,130,246,0.06)', padding: '2px 6px', borderRadius: 4 }}>ID: {r.id.slice(-8)}</span>
+                          <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 800, background: 'rgba(59,130,246,0.06)', padding: '2px 6px', borderRadius: 4 }}>ID: {r.id.slice(-8).toUpperCase()}</span>
                           <span style={{ fontSize: 11, color: 'var(--slate)', fontWeight: 600 }}>{r.approval_templates?.name}</span>
                         </div>
                       </td>
@@ -474,14 +446,6 @@ export default function AdminDashboard() {
                   ))}
                 </tbody>
               </table>
-            </div>
-          ) : (
-            <div style={{ padding: 100, textAlign: 'center', color: 'var(--slate-light)' }}>
-              <div style={{ width: 80, height: 80, borderRadius: 20, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-                <Search size={32} color="#cbd5e1" />
-              </div>
-              <h4 style={{ color: 'var(--midnight)', fontSize: 16, margin: '0 0 4px' }}>No Pertinent Signals Detected</h4>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 500 }}>All requests currently outside oversight scope</p>
             </div>
           )}
         </div>

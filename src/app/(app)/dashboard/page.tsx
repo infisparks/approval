@@ -471,6 +471,9 @@ function ActionCard({ req, onClick }: { req: ApprovalRequest; onClick: () => voi
             {req.cells?.name && <span className="badge badge-slate" style={{ fontSize: 9 }}>{req.cells.name}</span>}
           </div>
           <div className="request-meta">From {req.requester_name ?? req.profiles?.full_name ?? 'Unknown'} · {req.template_name}</div>
+          {req.has_amount && (
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#15803d', marginTop: 4 }}>₹ {req.amount?.toLocaleString('en-IN')}</div>
+          )}
         </div>
         <ArrowRight size={16} color="var(--slate-light)" />
       </div>
@@ -491,6 +494,9 @@ function SignedCard({ req, onClick }: { req: ApprovalRequest; onClick: () => voi
             {req.cells?.name && <span className="badge badge-slate" style={{ fontSize: 9 }}>{req.cells.name}</span>}
           </div>
           <div className="request-meta">From {req.requester_name ?? req.profiles?.full_name ?? 'Unknown'} · <StatusBadge status={req.status} /></div>
+          {req.has_amount && (
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#15803d', marginTop: 4 }}>₹ {req.amount?.toLocaleString('en-IN')}</div>
+          )}
         </div>
         <ArrowRight size={16} color="var(--slate-light)" />
       </div>
@@ -515,6 +521,13 @@ function MyRequestCard({ req, onClick }: { req: ApprovalRequest; onClick: () => 
           : <StatusBadge status={req.status} />
         }
       </div>
+      
+      {req.has_amount && (
+        <div style={{ marginBottom: 12, padding: '6px 12px', background: 'rgba(22,163,74,0.05)', borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 8, border: '1px solid rgba(22,163,74,0.1)' }}>
+          <Banknote size={14} color="#16a34a" />
+          <span style={{ fontSize: 14, fontWeight: 900, color: '#15803d' }}>₹ {req.amount?.toLocaleString('en-IN')}</span>
+        </div>
+      )}
 
       {req.status === 'reverted' && latestAction && (
         <div style={{ marginBottom: 12, padding: 10, borderRadius: 8, background: 'rgba(244,63,94,0.05)', border: '1px solid rgba(244,63,94,0.1)' }}>
