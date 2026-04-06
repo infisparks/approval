@@ -324,6 +324,24 @@ select.field-input { cursor: pointer; appearance: none; background-image: url("d
 .btn-full { width: 100%; }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
+.btn-premium {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px;
+  background: var(--midnight);
+  color: #fff;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  cursor: pointer;
+  border: none;
+}
+.btn-premium:hover {
+  background: var(--navy-light);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+}
+
 /* ── Badges ── */
 .badge {
   display: inline-flex; align-items: center; gap: 5px;

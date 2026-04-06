@@ -236,11 +236,8 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <button onClick={handleSearch} className="btn-premium" style={{ 
-            width: '100%', gap: 10, height: 52, fontSize: 15, fontWeight: 800, borderRadius: 12,
-            background: 'var(--midnight)', color: '#fff'
-          }}>
-            <Search size={18} /> ANALYZE DATASET
+          <button onClick={handleSearch} className="btn-premium" style={{ width: '100%', height: 52, borderRadius: 12, fontSize: 16, fontWeight: 800 }}>
+            <Search size={19} /> ANALYZE DATASET
           </button>
         </div>
 
@@ -323,50 +320,103 @@ export default function AdminDashboard() {
                   const doc = new jsPDF('p', 'pt', 'a4');
                   const total = filteredRequests.reduce((sum, r) => sum + (r.has_amount ? (r.amount || 0) : 0), 0);
                   
-                  doc.setFontSize(20);
+                  // Load Header
+                  try {
+                    const img = new Image();
+                    img.src = '/header/aiktcheader.png';
+                    await new Promise((resolve) => {
+                      img.onload = resolve;
+                      img.onerror = resolve; // Continue even if image fails
+                    });
+                    if (img.complete && img.naturalWidth > 0) {
+                      doc.addImage(img, 'PNG', 0, 0, 595, 75);
+                    }
+                  } catch (e) {
+                    console.error("Header load failed", e);
+                  }
+
+                  doc.setFontSize(18);
                   doc.setTextColor(15, 23, 42); 
-                  doc.text('INSTITUTIONAL PERFORMANCE REPORT', 40, 60);
+                  doc.setFont('helvetica', 'bold');
+                  doc.text('INSTITUTIONAL PERFORMANCE REPORT', 40, 110);
                   
                   doc.setFontSize(10);
                   doc.setTextColor(100, 116, 139);
-                  doc.text(`AIKTC Cluster Administrative Oversight • Generated: ${new Date().toLocaleString()}`, 40, 80);
+                  doc.setFont('helvetica', 'normal');
+                  doc.text(`AIKTC Cluster Administrative Oversight • Generated: ${new Date().toLocaleString()}`, 40, 125);
                   
-                  let y = 120;
-                  doc.setFillColor(248, 250, 252);
-                  doc.rect(40, y - 15, 515, 25, 'F');
+                  let y = 160;
+                  doc.setFillColor(241, 245, 249);
+                  doc.rect(40, y - 15, 515, 30, 'F');
                   doc.setTextColor(15, 23, 42);
                   doc.setFont('helvetica', 'bold');
-                  doc.text('ID', 45, y);
-                  doc.text('REQUEST TITLE', 100, y);
-                  doc.text('REQUESTER', 280, y);
-                  doc.text('STATUS', 420, y);
-                  doc.text('AMOUNT', 500, y);
+                  doc.text('ID', 45, y + 5);
+                  doc.text('REQUEST TITLE', 100, y + 5);
+                  doc.text('REQUESTER', 280, y + 5);
+                  doc.text('STATUS', 420, y + 5);
+                  doc.text('AMOUNT', 500, y + 5);
                   
-                  y += 25;
+                  y += 35;
                   doc.setFont('helvetica', 'normal');
                   doc.setFontSize(9);
                   
+                  const headerImage = new Image();
+                  headerImage.src = '/header/aiktcheader.png';
+                  await new Promise((res) => { headerImage.onload = res; headerImage.onerror = res; });
+
                   filteredRequests.forEach((r) => {
                     if (y > 780) {
                       doc.addPage();
-                      y = 60;
+                      // Brand Header on every page
+                      if (headerImage.complete && headerImage.naturalWidth > 0) {
+                        doc.addImage(headerImage, 'PNG', 0, 0, 595, 75);
+                      }
+                      
+                      doc.setFillColor(241, 245, 249);
+                      doc.rect(40, 85, 515, 30, 'F');
+                      doc.setTextColor(15, 23, 42);
+                      doc.setFont('helvetica', 'bold');
+                      doc.text('ID', 45, 105);
+                      doc.text('REQUEST TITLE', 100, 105);
+                      doc.text('REQUESTER', 280, 105);
+                      doc.text('STATUS', 420, 105);
+                      doc.text('AMOUNT', 500, 105);
+                      doc.setFont('helvetica', 'normal');
+                      y = 135;
                     }
+                    doc.setTextColor(71, 85, 105);
                     doc.text(r.id.slice(-6).toUpperCase(), 45, y);
-                    doc.text(r.title.slice(0, 30) + (r.title.length > 30 ? '...' : ''), 100, y);
+                    doc.setTextColor(15, 23, 42);
+                    doc.text(r.title.slice(0, 35) + (r.title.length > 35 ? '...' : ''), 100, y);
                     doc.text(r.profiles?.full_name?.slice(0, 20) || 'Unknown', 280, y);
+                    
+                    // Color code status in PDF
+                    if (r.status === 'approved') doc.setTextColor(22, 163, 74);
+                    else if (r.status === 'reverted') doc.setTextColor(217, 119, 6);
+                    else doc.setTextColor(37, 99, 235);
+                    
                     doc.text(r.status === 'pending' ? 'ACTIVE' : r.status.toUpperCase(), 420, y);
-                    doc.text(`INR ${r.has_amount ? r.amount?.toLocaleString() : 0}`, 500, y);
-                    y += 20;
+                    doc.setTextColor(15, 23, 42);
+                    doc.text(`₹ ${r.has_amount ? (r.amount || 0).toLocaleString('en-IN') : 0}`, 500, y);
+                    
+                    y += 24;
                     doc.setDrawColor(241, 245, 249);
-                    doc.line(40, y - 5, 555, y - 5);
+                    doc.line(40, y - 8, 555, y - 8);
                   });
                   
                   y += 30;
-                  doc.setFontSize(12);
+                  if (y > 800) { doc.addPage(); y = 60; }
+                  doc.setFillColor(15, 23, 42);
+                  doc.rect(40, y - 20, 515, 40, 'F');
+                  doc.setFontSize(11);
+                  doc.setTextColor(255, 255, 255);
                   doc.setFont('helvetica', 'bold');
-                  doc.text(`TOTAL FINANCIAL DISBURSEMENT: INR ${total.toLocaleString()}`, 40, y);
+                  doc.text(`EXECUTIVE FINANCIAL SUMMARY`, 55, y + 5);
+                  doc.setFontSize(14);
+                  doc.text(`TOTAL OUTLAY: INR ${total.toLocaleString('en-IN')}`, 320, y + 5);
                   
-                  doc.save(`AIKTC_Executive_Summary_${Date.now()}.pdf`);
+                  const blob = doc.output('blob');
+                  window.open(URL.createObjectURL(blob));
                 }}
                 className="btn-premium" style={{ gap: 8, height: 40, borderRadius: 10, fontSize: 11, fontWeight: 800, padding: '0 16px' }}
               >
