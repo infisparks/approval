@@ -70,8 +70,8 @@ export default function ProfilePage() {
           <InfoRow icon={<Building2 size={16} color="var(--accent)" />} label="Department" value={profile?.departments?.name ?? ''} />
         </div>
         <div className="profile-info-card">
-          <InfoRow icon={<School size={16} color="var(--emerald)" />} label="Institute Name" value={profile?.institute_name ?? ''} />
-          <InfoRow icon={<MapPin size={16} color="var(--emerald)" />} label="Institute Type" value={profile?.institute_type ?? ''} />
+          <InfoRow icon={<School size={16} color="var(--emerald)" />} label="Institute Name" value={profile?.institutes?.name ?? ''} />
+          <InfoRow icon={<MapPin size={16} color="var(--emerald)" />} label="Institute Type" value={profile?.institute_types?.name ?? ''} />
         </div>
       </div>
 
