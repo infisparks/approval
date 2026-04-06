@@ -137,8 +137,8 @@ export default function VerificationPage() {
                       background: 'rgba(255,255,255,0.015)', borderRadius: 16, border: '1px solid rgba(255,255,255,0.05)',
                       transition: 'all 0.2s'
                     }}>
-                      <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(16,185,129,0.1)', display: 'flex', alignItems: 'center', justifyCenter: 'center', flexShrink: 0 }}>
-                        <CheckCircle2 size={18} color="#10B981" />
+                      <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(16,185,129,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                         <CheckCircle2 size={18} color="#10B981" />
                       </div>
                       <div>
                         <p style={{ fontSize: 14, fontWeight: 800, color: '#fff', margin: 0 }}>{app.profiles?.full_name}</p>
