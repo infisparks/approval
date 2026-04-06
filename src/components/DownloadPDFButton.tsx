@@ -16,10 +16,10 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
   const generatePDF = async () => {
     setIsGenerating(true);
     try {
-      const verificationId = `VERIF-${request.id.slice(-10).toUpperCase()}`;
+      const verificationId = `VERIF-${request.id.slice(-8).toUpperCase()}`;
       const verificationUrl = `${window.location.origin}/verify/${request.id}`;
       const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl, {
-        width: 120,
+        width: 140,
         margin: 1,
         color: {
           dark: '#0f172a',
@@ -32,105 +32,130 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
       container.style.position = 'absolute';
       container.style.left = '-9999px';
       container.style.top = '0';
-      container.style.width = '800px';
-      container.style.padding = '0'; // External margin handled by container child
+      container.style.width = '850px';
       container.style.backgroundColor = '#ffffff';
       container.style.color = '#1e293b';
-      container.style.fontFamily = "'Inter', system-ui, sans-serif";
+      container.style.fontFamily = "'Inter', system-ui, -apple-system, sans-serif";
 
       const steps = request.approval_templates?.template_steps?.sort((a, b) => a.step_order - b.step_order) || [];
       const approvals = request.request_approvals?.sort((a, b) =>
         new Date(a.acted_at || 0).getTime() - new Date(b.acted_at || 0).getTime()
       ) || [];
 
+      // Status Badge Component
+      const getStatusBadge = (status: string) => {
+        const s = status?.toLowerCase() || 'pending';
+        const colors: any = {
+          approved: { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' },
+          reverted: { bg: '#fff7ed', text: '#9a3412', border: '#ffedd5' },
+          rejected: { bg: '#fef2f2', text: '#991b1b', border: '#fecaca' },
+          pending: { bg: '#eff6ff', text: '#1d4ed8', border: '#dbeafe' },
+          active: { bg: '#eff6ff', text: '#1d4ed8', border: '#dbeafe' },
+        };
+        const c = colors[s] || colors.pending;
+        return `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 9px; font-weight: 950; background: ${c.bg}; color: ${c.text}; border: 1px solid ${c.border}; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.5px;">${s}</span>`;
+      };
+
       container.innerHTML = `
-        <div style="padding: 30px 40px; background: #fff; border: 1px solid #eee; display: flex; flex-direction: column;">
-          <!-- Institution Header -->
-          <div style="margin: -30px -40px 25px -40px; text-align: center; border-bottom: 3px solid #0f172a; overflow: hidden;">
-            <img src="/header/aiktcheader.png" alt="AIKTC Header" style="width: 100%; height: auto; display: block;" />
-          </div>
-
-          <!-- Document Control Info -->
-          <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px; padding: 0 5px;">
-            <div>
-              <h1 style="margin: 0; color: #0f172a; font-size: 18px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Approval Certificate</h1>
-              <div style="margin-top: 4px; display: flex; gap: 15px; align-items: center;">
-                <p style="margin: 0; color: #64748b; font-size: 10px; font-weight: 600;">Verification ID: <span style="font-family: monospace; color: #0f172a;">${verificationId}</span></p>
-                <p style="margin: 0; color: #64748b; font-size: 10px; font-weight: 600;">Issued Date: <span style="color: #0f172a;">${new Date(request.created_at).toLocaleDateString('en-IN')}</span></p>
+        <div style="padding: 40px 50px; background: #fff; min-height: 1000px; display: flex; flex-direction: column;">
+          <!-- MODERN HEADER -->
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 45px; border-bottom: 2px solid #f1f5f9; padding-bottom: 30px;">
+            <div style="max-width: 60%;">
+              <div style="background: #0f172a; color: #fff; display: inline-block; padding: 5px 12px; border-radius: 4px; margin-bottom: 15px;">
+                <p style="margin: 0; font-size: 9px; font-weight: 900; letter-spacing: 2.5px; text-transform: uppercase;">INSTITUTIONAL AUTHORIZATION</p>
               </div>
-            </div>
-            <div style="text-align: right; display: flex; align-items: center; gap: 10px;">
-              <div style="text-align: right;">
-                <p style="margin: 0; color: #94a3b8; font-size: 8px; font-weight: 800; text-transform: uppercase;">Digital Authentication</p>
-                <p style="margin: 0; color: #64748b; font-size: 8px;">Scan to Verify Document</p>
-              </div>
-              <img src="${qrCodeDataUrl}" alt="QR" style="width: 50px; height: 50px; border: 1px solid #f1f5f9; padding: 2px;" />
-            </div>
-          </div>
-
-          <!-- Professional Information Grid -->
-          <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; margin-bottom: 20px;">
-            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 15px;">
-              <p style="margin: 0 0 4px; color: #94a3b8; font-size: 8px; font-weight: 800; text-transform: uppercase;">Request Information</p>
-              <h2 style="margin: 0 0 8px; color: #1e293b; font-size: 14px; font-weight: 700; line-height: 1.3;">${request.title}</h2>
-              <div style="display: flex; flex-wrap: wrap; gap: 12px;">
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span style="font-size: 9px; color: #64748b;">Protocol:</span>
-                  <span style="font-size: 9px; color: #0f172a; font-weight: 700;">${request.template_name || 'Standard'}</span>
+              <h1 style="margin: 0; color: #0f172a; font-size: 28px; font-weight: 950; line-height: 1.1; letter-spacing: -1px;">Approval Certificate<br/><span style="color: #2563eb;">Official Reference</span></h1>
+              <div style="margin-top: 20px; display: flex; gap: 25px;">
+                <div>
+                  <p style="margin: 0; color: #94a3b8; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Verification ID</p>
+                  <p style="margin: 3px 0 0; color: #0f172a; font-family: monospace; font-size: 13px; font-weight: 800;">${verificationId}</p>
                 </div>
-                ${request.cells?.name ? `
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span style="font-size: 9px; color: #64748b;">Department/Cell:</span>
-                  <span style="font-size: 9px; color: #2563eb; font-weight: 800;">${request.cells.name}</span>
-                </div>` : ''}
+                <div>
+                  <p style="margin: 0; color: #94a3b8; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Issue Date</p>
+                  <p style="margin: 3px 0 0; color: #0f172a; font-size: 13px; font-weight: 800;">${new Date(request.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                </div>
               </div>
             </div>
-            <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
-              <p style="margin: 0 0 2px; color: #166534; font-size: 8px; font-weight: 800; text-transform: uppercase;">Financial Disbursement</p>
-              <span style="font-size: 20px; font-weight: 950; color: #15803d; letter-spacing: -0.5px;">
-                ${request.has_amount ? `₹${request.amount?.toLocaleString('en-IN')}` : 'NO AMOUNT'}
-              </span>
+            <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 12px;">
+              <div style="padding: 6px; background: #fff; border: 1.5px solid #f1f5f9; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.04);">
+                <img src="${qrCodeDataUrl}" alt="QR" style="width: 80px; height: 80px; display: block;" />
+              </div>
+              <p style="margin: 0; color: #94a3b8; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Scan to Verify Document</p>
             </div>
           </div>
 
-          <!-- Body Content -->
-          <div style="border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; margin-bottom: 25px;">
-            <div style="background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 8px 15px; display: flex; justify-content: space-between; align-items: center;">
-              <p style="margin: 0; color: #64748b; font-size: 9px; font-weight: 800; text-transform: uppercase;">Official Statement & Justification</p>
-              <p style="margin: 0; color: #94a3b8; font-size: 8px;">Case Study Content</p>
+          <!-- PRIMARY INFORMATION -->
+          <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 35px; margin-bottom: 40px;">
+            <div style="background: #f8fafc; border-left: 5px solid #0f172a; padding: 25px; border-radius: 0 10px 10px 0;">
+              <p style="margin: 0 0 8px; color: #94a3b8; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Subject Title</p>
+              <h2 style="margin: 0 0 15px; color: #0f172a; font-size: 19px; font-weight: 900; line-height: 1.3; letter-spacing: -0.2px;">${request.title}</h2>
+              <div style="display: flex; gap: 25px;">
+                <div>
+                  <p style="margin: 0; color: #94a3b8; font-size: 9px; font-weight: 800; text-transform: uppercase;">Origin Department</p>
+                  <p style="margin: 3px 0 0; color: #1e293b; font-size: 11px; font-weight: 800;">${request.cells?.name || 'Central Administration'}</p>
+                </div>
+                <div>
+                  <p style="margin: 0; color: #94a3b8; font-size: 9px; font-weight: 800; text-transform: uppercase;">Approval Protocol</p>
+                  <p style="margin: 3px 0 0; color: #1e293b; font-size: 11px; font-weight: 800;">${request.template_name || 'Standard Internal'}</p>
+                </div>
+              </div>
             </div>
-            <div style="padding: 15px; background: #fff;">
-              <h3 style="margin: 0 0 10px; font-size: 12px; font-weight: 700; color: #0f172a; border-left: 3px solid #0f172a; padding-left: 10px;">${request.content?.subject || 'Reference Subject'}</h3>
-              <p style="margin: 0; color: #334155; font-size: 10.5px; line-height: 1.5; white-space: pre-wrap;">${request.content?.body || 'No detailed content provided.'}</p>
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+              <div style="background: #f0fdf4; border: 1px solid #dcfce7; border-radius: 12px; padding: 18px; text-align: center;">
+                <p style="margin: 0 0 6px; color: #166534; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Approved Value</p>
+                <p style="margin: 0; color: #15803d; font-size: 26px; font-weight: 950; letter-spacing: -1.5px;">
+                  ${request.has_amount ? `₹${request.amount?.toLocaleString('en-IN')}` : 'NO AMT'}
+                </p>
+              </div>
+              <div style="background: #eff6ff; border: 1px solid #dbeafe; border-radius: 12px; padding: 18px; text-align: center;">
+                <p style="margin: 0 0 6px; color: #1e40af; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Overall Decision</p>
+                <div style="margin-top: 8px;">${getStatusBadge(request.status?.toUpperCase())}</div>
+              </div>
             </div>
           </div>
 
-          <!-- DIGITAL SIGNATURES PANEL -->
-          <div style="border-top: 2px double #0f172a; padding-top: 15px; margin-bottom: 20px;">
-            <p style="margin: 0 0 15px; color: #0f172a; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; text-align: center;">Official Endorsement & Signatures</p>
-            
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+          <!-- STATEMENT BODY -->
+          <div style="margin-bottom: 45px;">
+            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+              <div style="height: 1.5px; flex: 1; background: #f1f5f9;"></div>
+              <p style="margin: 0; color: #64748b; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px;">Case Statement & Justification</p>
+              <div style="height: 1.5px; flex: 1; background: #f1f5f9;"></div>
+            </div>
+            <div style="background: #fff; padding: 0 10px; border-left: 2px solid #f1f5f9; margin-left: 5px;">
+              <h3 style="margin: 0 0 15px; font-size: 16px; font-weight: 850; color: #0f172a; letter-spacing: -0.3px;">${request.content?.subject || 'Reference Application'}</h3>
+              <div style="color: #334155; font-size: 12px; line-height: 1.7; white-space: pre-wrap; font-weight: 450;">${request.content?.body || 'No detailed content provided.'}</div>
+            </div>
+          </div>
+
+          <!-- ENDORSEMENT BOARD -->
+          <div style="margin-top: auto; border: 1.5px solid #f1f5f9; border-radius: 16px; overflow: hidden; box-shadow: 0 15px 35px rgba(0,0,0,0.02);">
+            <div style="background: #fcfcfd; border-bottom: 1.5px solid #f1f5f9; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center;">
+              <p style="margin: 0; color: #0f172a; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px;">Official Endorsement Ledger</p>
+              <p style="margin: 0; color: #94a3b8; font-size: 9px; font-weight: 700; text-transform: uppercase;">Digital Authentication Board</p>
+            </div>
+            <div style="padding: 25px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
               ${steps.map(step => {
                 const hist = approvals.filter(a => a.step_order === step.step_order);
                 const latest = hist[hist.length - 1];
-                if (!latest && step.step_order > request.current_step_order) return ''; 
+                if (!latest && step.step_order > request.current_step_order) return '';
 
                 return `
-                  <div style="border: 1.5px dashed #cbd5e1; border-radius: 6px; padding: 10px; background-color: ${latest?.status === 'approved' ? '#fcfdfa' : '#fff'}; display: flex; flex-direction: column; gap: 6px; min-height: 110px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                      <p style="margin: 0; color: #94a3b8; font-size: 7.5px; font-weight: 800; text-transform: uppercase;">${step.designations?.name || 'Signatory'}</p>
-                      <span style="font-size: 6.5px; font-weight: 900; padding: 2px 5px; border-radius: 3px; background-color: ${latest?.status === 'approved' ? '#dcfce7' : '#fee2e2'}; color: ${latest?.status === 'approved' ? '#166534' : '#991b1b'}; text-transform: uppercase;">
-                        ${latest?.status || 'WAITING'}
-                      </span>
+                  <div style="background: #fff; border: 1px solid #f1f5f9; border-radius: 10px; padding: 15px; display: flex; flex-direction: column; gap: 10px; min-height: 100px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                      <p style="margin: 0; color: #94a3b8; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${step.designations?.name || 'Signatory'}</p>
+                      <div style="transform: scale(0.85); transform-origin: top right;">
+                        ${getStatusBadge(latest?.status?.toUpperCase() || 'PENDING')}
+                      </div>
                     </div>
-                    <div>
-                      <p style="margin: 0; color: #0f172a; font-size: 11px; font-weight: 800;">${latest?.profiles?.full_name || 'Pending Action'}</p>
-                      <p style="margin: 2px 0 0; color: #64748b; font-size: 9px; font-weight: 600; font-style: italic; line-height: 1.2;">
-                        ${latest?.comments ? `"${latest.comments}"` : '<span style="opacity: 0.4;">...</span>'}
+                    <div style="min-height: 50px; display: flex; flex-direction: column; justify-content: center;">
+                      <p style="margin: 0; color: #0f172a; font-size: 13px; font-weight: 800;">${latest?.profiles?.full_name || 'Await Decision'}</p>
+                      <p style="margin: 5px 0 0; color: #64748b; font-size: 9px; font-weight: 600; font-style: italic; line-height: 1.4; opacity: 0.9;">
+                        ${latest?.comments ? `"${latest.comments}"` : '<span style="opacity: 0.25;">Pending...</span>'}
                       </p>
                     </div>
-                    <div style="margin-top: auto; padding-top: 6px; border-top: 1px solid #f1f5f9;">
-                      <p style="margin: 0; color: #94a3b8; font-size: 7px; text-align: right;">${latest?.acted_at ? new Date(latest.acted_at).toLocaleDateString('en-IN') : '--/--/----'}</p>
+                    <div style="margin-top: auto; padding-top: 10px; border-top: 1px solid #fcfcfd; display: flex; justify-content: space-between; align-items: center;">
+                      <span style="font-size: 7.5px; color: #cbd5e1; font-weight: 800; letter-spacing: 0.5px;">UNIPORT AUTH</span>
+                      <span style="font-size: 8px; color: #94a3b8; font-weight: 800;">${latest?.acted_at ? new Date(latest.acted_at).toLocaleDateString('en-IN') : '--/--/--'}</span>
                     </div>
                   </div>
                 `;
@@ -138,32 +163,15 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
             </div>
           </div>
 
-          <!-- ACTION HISTORY FOR REVERTS -->
-          ${approvals.some(a => a.status === 'reverted') ? `
-          <div style="background: #fffbeb; border: 1px solid #fef3c7; border-radius: 6px; padding: 12px; margin-bottom: 20px;">
-            <p style="margin: 0 0 8px; color: #92400e; font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Amendment History & Feedback</p>
-            <div style="display: flex; flex-direction: column; gap: 4px;">
-              ${approvals.map(a => `
-                <div style="font-size: 9px; color: #92400e; display: flex; justify-content: space-between; align-items: flex-start; padding: 3px 0; border-bottom: 1px solid rgba(146, 64, 14, 0.1);">
-                  <span>
-                    <strong>${a.status.toUpperCase()}</strong> by ${a.profiles?.full_name} (${a.approver_name || 'Admin'})
-                    <div style="font-size: 8px; font-style: italic; margin-top: 1px;">"${a.comments || 'No comment'}"</div>
-                  </span>
-                  <span style="font-size: 8px; opacity: 0.7; white-space: nowrap;">${new Date(a.acted_at || '').toLocaleDateString()}</span>
-                </div>
-              `).join('')}
-            </div>
-          </div>` : ''}
-
-          <!-- Page Footer -->
-          <div style="border-top: 1px solid #f1f5f9; padding-top: 12px; margin-top: auto; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <p style="margin: 0; color: #94a3b8; font-size: 8px; font-weight: 700;">Initiated By: <span style="color: #475569;">${request.requester_name || request.profiles?.full_name}</span></p>
-              <p style="margin: 1px 0 0; color: #cbd5e1; font-size: 7.5px;">This is a digitally signed and verified document. Required no physical signature.</p>
+          <!-- DOCUMENT FOOTER -->
+          <div style="margin-top: 50px; padding-top: 25px; border-top: 2.5px solid #0f172a; display: flex; justify-content: space-between; align-items: flex-end;">
+            <div style="max-width: 450px;">
+              <p style="margin: 0; color: #0f172a; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px;">Initiated By: <span style="color: #2563eb;">${(request.requester_name || request.profiles?.full_name || '').toUpperCase()}</span></p>
+              <p style="margin: 6px 0 0; color: #94a3b8; font-size: 8.5px; font-weight: 600; line-height: 1.5;">This institutional certificate is a secure electronic record generated by the UniPort Governance System. It is digitally authenticated and holds full validity without a physical signature under AIKTC Cluster regulations.</p>
             </div>
             <div style="text-align: right;">
-              <p style="margin: 0; color: #94a3b8; font-size: 8px; font-weight: 700;">Document Generated: ${new Date().toLocaleString('en-IN')}</p>
-              <p style="margin: 1px 0 0; color: #cbd5e1; font-size: 7.5px;">AikTC Cluster Approval Management System v1.1.2</p>
+              <p style="margin: 0; color: #1e293b; font-size: 10px; font-weight: 900; letter-spacing: 0.5px;">Auth Date: ${new Date().toLocaleString('en-IN')}</p>
+              <p style="margin: 5px 0 0; color: #2563eb; font-size: 8.5px; font-weight: 900; letter-spacing: 1px;">SYSTEM BUILD: AIKTC-CERT-LTS-2026</p>
             </div>
           </div>
         </div>
@@ -171,7 +179,7 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
 
       document.body.appendChild(container);
 
-      // Wait for image to load if any
+      // Wait for images (QR code) to load
       const images = container.getElementsByTagName('img');
       await Promise.all(
         Array.from(images).map(img => {
@@ -184,22 +192,22 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
       );
 
       const canvas = await html2canvas(container, {
-        scale: 2.5, // Increased scale for pro-grade sharpness
+        scale: 2.0, // Switched to 2.0 for better memory performance
         useCORS: true,
         backgroundColor: '#ffffff',
-        windowWidth: 800,
+        windowWidth: 850,
         logging: false
       });
 
-      const imgData = canvas.toDataURL('image/png', 1.0);
+      // Use JPEG for robust PDF compatibility and avoid PNG signature issues
+      const imgData = canvas.toDataURL('image/jpeg', 0.98);
 
-      // Multi-page logic for jsPDF
+      // Create PDF
       const pdf = new jsPDF('p', 'pt', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
 
-      // Standard Institutional Margins (pt)
-      const horizontalMargin = 40;
+      const horizontalMargin = 30; // Reduced margin for modern look
       const topMargin = 40;
       const bottomMargin = 40;
 
@@ -211,26 +219,24 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
       let position = topMargin;
       let heightLeft = imgHeight;
 
-      // Add the entire image to the first page (jsPDF will automatically clip based on the current page boundary)
-      pdf.addImage(imgData, 'PNG', horizontalMargin, position, imgWidth, imgHeight);
+      // Add main content
+      pdf.addImage(imgData, 'JPEG', horizontalMargin, position, imgWidth, imgHeight, undefined, 'FAST');
       heightLeft -= pageHeight;
 
-      // Only add new pages if there is significant remaining content (using a 40pt buffer to prevent blank/duplicate footers)
-      while (heightLeft > 40) {
+      while (heightLeft > 20) {
         pdf.addPage();
-        // The position is negative. We are "sliding" the full image up.
-        // On the second page, we want to start from where the first page cut off.
-        position = (heightLeft - imgHeight) + topMargin; 
-        pdf.addImage(imgData, 'PNG', horizontalMargin, position, imgWidth, imgHeight);
+        position = (heightLeft - imgHeight) + topMargin;
+        pdf.addImage(imgData, 'JPEG', horizontalMargin, position, imgWidth, imgHeight, undefined, 'FAST');
         heightLeft -= pageHeight;
       }
 
-      // Open as Blob URL
+      // Open in new tab
       const blob = pdf.output('blob');
       const url = URL.createObjectURL(blob);
-      window.open(url, '_blank', 'noreferrer');
-
-      document.body.removeChild(container);
+      const win = window.open(url, '_blank');
+      if (container.parentNode) {
+        document.body.removeChild(container);
+      }
     } catch (error) {
       console.error('PDF generation failed:', error);
       alert('Failed to generate PDF. Please try again.');

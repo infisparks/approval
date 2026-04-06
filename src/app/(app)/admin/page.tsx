@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { 
   BarChart3, Calendar as CalendarIcon, Search, Filter,
   CheckCircle2, RotateCcw, FileText, Download, 
-  Building2, Shapes, AppWindow, Clock
+  Building2, Shapes, AppWindow, Clock, X
 } from 'lucide-react';
 import Select from 'react-select';
 import makeAnimated from 'react-select/animated';
@@ -18,6 +18,7 @@ import { DatePickerWithRange } from '@/components/DateRangePicker';
 import { DateRange } from 'react-day-picker';
 import { subDays, startOfDay, endOfDay } from 'date-fns';
 import jsPDF from 'jspdf';
+import DownloadPDFButton from '@/components/DownloadPDFButton';
 
 const animatedComponents = makeAnimated();
 
@@ -81,6 +82,7 @@ export default function AdminDashboard() {
   const [cells, setCells] = useState<any[]>([]);
   const [requests, setRequests] = useState<ApprovalRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedRequest, setSelectedRequest] = useState<ApprovalRequest | null>(null);
 
   useEffect(() => {
     if (!authLoading && (!profile || (profile.designations?.rank ?? 0) < 4)) {
@@ -146,7 +148,8 @@ export default function AdminDashboard() {
 
   return (
     <AppShell title="Internal Oversight Dashboard">
-      <div style={{ marginBottom: 32 }}>
+      <>
+        <div style={{ marginBottom: 32 }}>
         <div style={{ 
           background: 'linear-gradient(135deg, var(--midnight), var(--navy-light))',
           borderRadius: 24, padding: '40px', color: '#fff', marginBottom: 28,
@@ -317,106 +320,133 @@ export default function AdminDashboard() {
               
               <button 
                 onClick={async () => {
-                  const doc = new jsPDF('p', 'pt', 'a4');
-                  const total = filteredRequests.reduce((sum, r) => sum + (r.has_amount ? (r.amount || 0) : 0), 0);
-                  
-                  // Load Header
                   try {
-                    const img = new Image();
-                    img.src = '/header/aiktcheader.png';
-                    await new Promise((resolve) => {
-                      img.onload = resolve;
-                      img.onerror = resolve; // Continue even if image fails
+                    const total = filteredRequests.reduce((sum, r) => sum + (r.has_amount ? (r.amount || 0) : 0), 0);
+                    
+                    // Create a hidden container for the report
+                    const container = document.createElement('div');
+                    container.style.position = 'fixed';
+                    container.style.left = '-9999px';
+                    container.style.top = '0';
+                    container.style.width = '1000px';
+                    container.style.background = '#fff';
+                    container.style.fontFamily = "'Inter', -apple-system, sans-serif";
+                    container.style.padding = '0';
+
+                    container.innerHTML = `
+                      <div style="padding: 45px 55px; background: #fff; min-height: 1200px; display: flex; flex-direction: column;">
+                        <!-- Report Header -->
+                        <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 4px solid #0f172a; padding-bottom: 25px; margin-bottom: 35px;">
+                          <div>
+                            <div style="background: #0f172a; color: #fff; display: inline-block; padding: 5px 12px; border-radius: 4px; margin-bottom: 12px; font-size: 11px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase;">ADMINISTRATIVE DASHBOARD</div>
+                            <h1 style="margin: 0; color: #0f172a; font-size: 36px; font-weight: 950; letter-spacing: -1.5px; line-height: 1;">INSTITUTIONAL <br/><span style="color: #2563eb;">PERFORMANCE REPORT</span></h1>
+                          </div>
+                          <div style="text-align: right;">
+                            <p style="margin: 0; color: #94a3b8; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Document Authenticated On</p>
+                            <p style="margin: 5px 0 0; color: #0f172a; font-size: 16px; font-weight: 800;">${new Date().toLocaleString('en-IN', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                          </div>
+                        </div>
+
+                        <!-- Data Table -->
+                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 50px;">
+                          <thead>
+                            <tr style="background: #fcfcfd; border-bottom: 2px solid #e2e8f0;">
+                              <th style="padding: 16px 20px; text-align: left; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; width: 100px;">REF ID</th>
+                              <th style="padding: 16px 20px; text-align: left; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;">APPLICATION DETAILS</th>
+                              <th style="padding: 16px 20px; text-align: left; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;">STAKEHOLDER</th>
+                              <th style="padding: 16px 20px; text-align: center; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; width: 120px;">STATUS</th>
+                              <th style="padding: 16px 20px; text-align: right; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; width: 140px;">AMOUNT (INR)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            ${filteredRequests.map((r, idx) => {
+                              const statusColor = r.status === 'approved' ? '#166534' : r.status === 'reverted' ? '#92400e' : '#1d4ed8';
+                              const statusBg = r.status === 'approved' ? '#dcfce7' : r.status === 'reverted' ? '#fef3c7' : '#eff6ff';
+                              const rowBg = idx % 2 === 0 ? '#ffffff' : '#fcfcfd';
+                              return `
+                                <tr style="background: ${rowBg}; vertical-align: middle;">
+                                  <td style="padding: 20px; border-bottom: 1px solid #f1f5f9; font-family: monospace; font-size: 13px; font-weight: 700; color: #94a3b8; vertical-align: middle;">#${r.id.slice(-6).toUpperCase()}</td>
+                                  <td style="padding: 20px; border-bottom: 1px solid #f1f5f9; vertical-align: middle;">
+                                    <div style="font-size: 15px; font-weight: 800; color: #0f172a; margin-bottom: 4px;">${r.title}</div>
+                                    <div style="font-size: 11px; color: #2563eb; font-weight: 700; text-transform: uppercase; opacity: 0.8;">${r.profiles?.institutes?.name || 'AIKTC Institutional'}</div>
+                                  </td>
+                                  <td style="padding: 20px; border-bottom: 1px solid #f1f5f9; vertical-align: middle;">
+                                    <div style="font-size: 14px; font-weight: 800; color: #1e293b;">${r.profiles?.full_name || 'System User'}</div>
+                                    <div style="font-size: 11px; color: #94a3b8; font-weight: 600;">${r.profiles?.departments?.name || 'Administrative Unit'}</div>
+                                  </td>
+                                  <td style="padding: 20px; border-bottom: 1px solid #f1f5f9; text-align: center; vertical-align: middle;">
+                                    <span style="display: inline-block; padding: 6px 12px; border-radius: 6px; font-size: 10px; font-weight: 900; background: ${statusBg}; color: ${statusColor}; border: 1px solid rgba(0,0,0,0.03); text-transform: uppercase; letter-spacing: 0.5px;">
+                                      ${(r.status === 'pending' ? 'ACTIVE' : r.status).toUpperCase()}
+                                    </span>
+                                  </td>
+                                  <td style="padding: 20px; border-bottom: 1px solid #f1f5f9; text-align: right; vertical-align: middle;">
+                                    <div style="font-size: 18px; font-weight: 950; color: #0f172a; letter-spacing: -0.5px;">
+                                      ${r.has_amount ? `₹${r.amount?.toLocaleString('en-IN')}` : '<span style="color: #cbd5e1; font-size: 12px; font-weight: 700;">—</span>'}
+                                    </div>
+                                  </td>
+                                </tr>
+                              `;
+                            }).join('')}
+                          </tbody>
+                        </table>
+
+                        <!-- Summary Block -->
+                        <div style="margin-top: auto; background: linear-gradient(135deg, #0f172a, #1e293b); border-radius: 20px; padding: 40px; display: flex; justify-content: space-between; align-items: center; color: #fff; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
+                          <div>
+                            <p style="margin: 0; font-size: 12px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 3px;">Resource Allocation Summary</p>
+                            <h2 style="margin: 8px 0 0; font-size: 28px; font-weight: 900; letter-spacing: -1px;">Consolidated <span style="color: #6366f1;">Aggregate</span></h2>
+                          </div>
+                          <div style="text-align: right;">
+                            <p style="margin: 0; font-size: 12px; font-weight: 800; color: #6366f1; text-transform: uppercase; letter-spacing: 1px;">Total Authorized Funds</p>
+                            <div style="font-size: 44px; font-weight: 950; letter-spacing: -2px; line-height: 1;">₹${total.toLocaleString('en-IN')}</div>
+                          </div>
+                        </div>
+
+                        <!-- Footer -->
+                        <div style="margin-top: 50px; padding-top: 25px; border-top: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center;">
+                          <div style="display: flex; align-items: center; gap: 15px;">
+                            <div style="width: 10px; height: 10px; border-radius: 50%; background: #2563eb;"></div>
+                            <p style="margin: 0; color: #0f172a; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Institutional Record • Confidential</p>
+                          </div>
+                          <p style="margin: 0; color: #94a3b8; font-size: 10px; font-weight: 600;">System Generated via UniPort v2.4.1 • No Signature Required</p>
+                        </div>
+                      </div>
+                    `;
+
+                    document.body.appendChild(container);
+
+                    const html2canvas = (await import('html2canvas')).default;
+                    const canvas = await html2canvas(container, {
+                      scale: 2,
+                      useCORS: true,
+                      logging: false,
+                      backgroundColor: '#ffffff'
                     });
-                    if (img.complete && img.naturalWidth > 0) {
-                      doc.addImage(img, 'PNG', 0, 0, 595, 75);
+
+                    const imgData = canvas.toDataURL('image/jpeg', 0.98);
+                    const pdf = new jsPDF('p', 'pt', 'a4');
+                    const imgWidth = 595.28;
+                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    
+                    pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
+                    
+                    // Handle multi-page
+                    let heightLeft = imgHeight - 841.89;
+                    let position = -841.89;
+                    while (heightLeft > 0) {
+                      pdf.addPage();
+                      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+                      heightLeft -= 841.89;
+                      position -= 841.89;
                     }
+
+                    const blob = pdf.output('blob');
+                    window.open(URL.createObjectURL(blob));
+                    document.body.removeChild(container);
                   } catch (e) {
-                    console.error("Header load failed", e);
+                    console.error("PDF Generation failed:", e);
+                    alert("Failed to generate PDF report.");
                   }
-
-                  doc.setFontSize(18);
-                  doc.setTextColor(15, 23, 42); 
-                  doc.setFont('helvetica', 'bold');
-                  doc.text('INSTITUTIONAL PERFORMANCE REPORT', 40, 110);
-                  
-                  doc.setFontSize(10);
-                  doc.setTextColor(100, 116, 139);
-                  doc.setFont('helvetica', 'normal');
-                  doc.text(`AIKTC Cluster Administrative Oversight • Generated: ${new Date().toLocaleString()}`, 40, 125);
-                  
-                  let y = 160;
-                  doc.setFillColor(241, 245, 249);
-                  doc.rect(40, y - 15, 515, 30, 'F');
-                  doc.setTextColor(15, 23, 42);
-                  doc.setFont('helvetica', 'bold');
-                  doc.text('ID', 45, y + 5);
-                  doc.text('REQUEST TITLE', 100, y + 5);
-                  doc.text('REQUESTER', 280, y + 5);
-                  doc.text('STATUS', 420, y + 5);
-                  doc.text('AMOUNT', 500, y + 5);
-                  
-                  y += 35;
-                  doc.setFont('helvetica', 'normal');
-                  doc.setFontSize(9);
-                  
-                  const headerImage = new Image();
-                  headerImage.src = '/header/aiktcheader.png';
-                  await new Promise((res) => { headerImage.onload = res; headerImage.onerror = res; });
-
-                  filteredRequests.forEach((r) => {
-                    if (y > 780) {
-                      doc.addPage();
-                      // Brand Header on every page
-                      if (headerImage.complete && headerImage.naturalWidth > 0) {
-                        doc.addImage(headerImage, 'PNG', 0, 0, 595, 75);
-                      }
-                      
-                      doc.setFillColor(241, 245, 249);
-                      doc.rect(40, 85, 515, 30, 'F');
-                      doc.setTextColor(15, 23, 42);
-                      doc.setFont('helvetica', 'bold');
-                      doc.text('ID', 45, 105);
-                      doc.text('REQUEST TITLE', 100, 105);
-                      doc.text('REQUESTER', 280, 105);
-                      doc.text('STATUS', 420, 105);
-                      doc.text('AMOUNT', 500, 105);
-                      doc.setFont('helvetica', 'normal');
-                      y = 135;
-                    }
-                    doc.setTextColor(71, 85, 105);
-                    doc.text(r.id.slice(-6).toUpperCase(), 45, y);
-                    doc.setTextColor(15, 23, 42);
-                    doc.text(r.title.slice(0, 35) + (r.title.length > 35 ? '...' : ''), 100, y);
-                    doc.text(r.profiles?.full_name?.slice(0, 20) || 'Unknown', 280, y);
-                    
-                    // Color code status in PDF
-                    if (r.status === 'approved') doc.setTextColor(22, 163, 74);
-                    else if (r.status === 'reverted') doc.setTextColor(217, 119, 6);
-                    else doc.setTextColor(37, 99, 235);
-                    
-                    doc.text(r.status === 'pending' ? 'ACTIVE' : r.status.toUpperCase(), 420, y);
-                    doc.setTextColor(15, 23, 42);
-                    doc.text(`₹ ${r.has_amount ? (r.amount || 0).toLocaleString('en-IN') : 0}`, 500, y);
-                    
-                    y += 24;
-                    doc.setDrawColor(241, 245, 249);
-                    doc.line(40, y - 8, 555, y - 8);
-                  });
-                  
-                  y += 30;
-                  if (y > 800) { doc.addPage(); y = 60; }
-                  doc.setFillColor(15, 23, 42);
-                  doc.rect(40, y - 20, 515, 40, 'F');
-                  doc.setFontSize(11);
-                  doc.setTextColor(255, 255, 255);
-                  doc.setFont('helvetica', 'bold');
-                  doc.text(`EXECUTIVE FINANCIAL SUMMARY`, 55, y + 5);
-                  doc.setFontSize(14);
-                  doc.text(`TOTAL OUTLAY: INR ${total.toLocaleString('en-IN')}`, 320, y + 5);
-                  
-                  const blob = doc.output('blob');
-                  window.open(URL.createObjectURL(blob));
                 }}
                 className="btn-premium" style={{ gap: 8, height: 40, borderRadius: 10, fontSize: 11, fontWeight: 800, padding: '0 16px' }}
               >
@@ -450,7 +480,13 @@ export default function AdminDashboard() {
                 </thead>
                 <tbody>
                   {filteredRequests.map(r => (
-                    <tr key={r.id} style={{ borderBottom: '1px solid #f8fafc', transition: 'background 0.2s', cursor: 'default' }}>
+                    <tr 
+                      key={r.id} 
+                      onClick={() => setSelectedRequest(r)}
+                      style={{ borderBottom: '1px solid #f8fafc', transition: 'background 0.2s', cursor: 'pointer' }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
                       <td style={{ padding: '20px 32px' }}>
                         <div style={{ fontWeight: 800, color: 'var(--midnight)', fontSize: 15 }}>{r.title}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
@@ -499,7 +535,97 @@ export default function AdminDashboard() {
             </div>
           )}
         </div>
+
+        {/* Professional Inspection Modal Overlay */}
+        {selectedRequest && (
+          <div 
+            style={{ 
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+              background: 'rgba(10,15,30,0.7)', backdropFilter: 'blur(10px)', 
+              zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+              animation: 'fadeIn 0.3s ease'
+            }}
+            onClick={() => setSelectedRequest(null)}
+          >
+            <div 
+              style={{ 
+                background: '#fff', borderRadius: 24, width: '100%', maxWidth: 800, 
+                maxHeight: '90vh', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.25)',
+                display: 'flex', flexDirection: 'column', animation: 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Institutional Branding Header */}
+              <div style={{ padding: '28px 32px', background: 'linear-gradient(135deg, var(--midnight), var(--navy-light))', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative' }}>
+                <div style={{ position: 'absolute', right: 20, top: -20, opacity: 0.1 }}><FileText size={120} color="#fff" /></div>
+                <div style={{ position: 'relative', zIndex: 1 }}>
+                  <div style={{ fontSize: 10, fontWeight: 900, color: 'var(--gold)', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 6 }}>Request Inspection Panel</div>
+                  <h2 style={{ fontSize: 24, fontWeight: 800, color: '#fff', margin: 0, letterSpacing: -0.5 }}>{selectedRequest.title}</h2>
+                </div>
+                <button 
+                  onClick={() => setSelectedRequest(null)}
+                  style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s', position: 'relative', zIndex: 1 }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Inspector Content Panes */}
+              <div style={{ padding: 40, overflowY: 'auto', flex: 1 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 24, marginBottom: 32 }}>
+                  <div style={{ background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 16, padding: 24 }}>
+                    <div style={{ fontSize: 11, fontWeight: 900, color: 'var(--slate)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Case Narrative</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--midnight)', marginBottom: 8, borderLeft: '4px solid var(--accent)', paddingLeft: 12 }}>{selectedRequest.content?.subject || 'Reference Subject'}</div>
+                    <div style={{ fontSize: 14, color: 'var(--slate)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{selectedRequest.content?.body || 'No detailed content provided.'}</div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div style={{ background: 'rgba(16, 185, 129, 0.05)', border: '1px solid var(--emerald)', borderRadius: 16, padding: 24, textAlign: 'center' }}>
+                      <div style={{ fontSize: 10, fontWeight: 900, color: 'var(--emerald)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Fiscal Impact</div>
+                      <div style={{ fontSize: 32, fontWeight: 950, color: 'var(--emerald)', letterSpacing: -1 }}>₹{selectedRequest.has_amount ? (selectedRequest.amount || 0).toLocaleString('en-IN') : '0.00'}</div>
+                      <div style={{ fontSize: 11, color: 'var(--emerald)', fontWeight: 600, marginTop: 4 }}>Institutional Disbursement</div>
+                    </div>
+                    <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 16, padding: 20 }}>
+                      <div style={{ fontSize: 10, fontWeight: 900, color: 'var(--slate)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Origin Profile</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>{selectedRequest.profiles?.full_name?.charAt(0)}</div>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--midnight)' }}>{selectedRequest.profiles?.full_name}</div>
+                          <div style={{ fontSize: 12, color: 'var(--slate)', fontWeight: 600 }}>{selectedRequest.profiles?.departments?.name}</div>
+                        </div>
+                      </div>
+                      <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f1f5f9', fontSize: 11, color: 'var(--slate)', fontWeight: 500 }}>
+                        {selectedRequest.profiles?.institutes?.name}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 32, display: 'flex', justifyContent: 'flex-end', gap: 16 }}>
+                  <button 
+                    onClick={() => setSelectedRequest(null)}
+                    style={{ padding: '12px 24px', borderRadius: 12, background: '#f1f5f9', border: 'none', color: 'var(--slate)', fontWeight: 800, fontSize: 13, cursor: 'pointer', transition: 'all 0.2s' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#e2e8f0'}
+                    onMouseLeave={e => e.currentTarget.style.background = '#f1f5f9'}
+                  >
+                    CLOSE INSPECTOR
+                  </button>
+                  <div style={{ width: 220 }}>
+                    <DownloadPDFButton request={selectedRequest} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    </AppShell>
+
+      <style jsx global>{`
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+      `}</style>
+    </>
+  </AppShell>
   );
 }
