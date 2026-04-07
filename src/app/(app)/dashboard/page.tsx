@@ -5,7 +5,7 @@ import {
   AlertCircle, CheckSquare, FileText, FileCog, CheckCircle2,
   FileSignature, FileQuestion, Inbox, Clock, RotateCcw,
   XCircle, Banknote, Plus, ArrowRight, Check, Circle,
-  Download,
+  Download, RefreshCw,
 } from 'lucide-react';
 import DownloadPDFButton from '@/components/DownloadPDFButton';
 import AppShell from '@/components/AppShell';
@@ -628,9 +628,19 @@ export default function DashboardPage() {
     <AppShell
       title="Dashboard"
       actions={
-        <button className="topbar-btn topbar-btn-primary" onClick={() => router.push('/templates')}>
-          <Plus size={16} /> New Letter
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button 
+            className="topbar-btn topbar-btn-outline" 
+            onClick={loadAll} 
+            disabled={loadingData}
+            title="Refresh dashboard"
+          >
+            <RefreshCw size={16} className={loadingData ? 'animate-spin' : ''} />
+          </button>
+          <button className="topbar-btn topbar-btn-primary" onClick={() => router.push('/templates')}>
+            <Plus size={16} /> New Letter
+          </button>
+        </div>
       }
     >
       {/* Welcome banner */}
