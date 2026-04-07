@@ -76,10 +76,17 @@ export default function AdminDashboard() {
   const [selInstitutes, setSelInstitutes] = useState<any[]>([]);
   const [selDepartments, setSelDepartments] = useState<any[]>([]);
   const [selCells, setSelCells] = useState<any[]>([]);
+  const [selStatuses, setSelStatuses] = useState<any[]>([]);
 
   const [institutes, setInstitutes] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
   const [cells, setCells] = useState<any[]>([]);
+  const statusOptions = [
+    { value: 'approved', label: 'Approved' },
+    { value: 'reverted', label: 'Reverted' },
+    { value: 'pending', label: 'Active' },
+    { value: 'rejected', label: 'Rejected' },
+  ];
   const [requests, setRequests] = useState<ApprovalRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<ApprovalRequest | null>(null);
@@ -133,7 +140,11 @@ export default function AdminDashboard() {
     }
   };
 
-  const filteredRequests = requests.filter(r => ['approved', 'reverted', 'pending'].includes(r.status));
+  const filteredRequests = requests.filter(r => {
+    const s = selStatuses.map(x => x.value);
+    if (s.length > 0) return s.includes(r.status);
+    return ['approved', 'reverted', 'pending'].includes(r.status);
+  });
 
   const stats = {
     total: filteredRequests.length,
@@ -234,6 +245,22 @@ export default function AdminDashboard() {
                 styles={selectStyles}
                 components={animatedComponents}
                 placeholder="Select Cells..."
+                closeMenuOnSelect={false}
+              />
+            </div>
+
+            <div className="field-group">
+              <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Filter size={12} /> Status State
+              </label>
+              <Select 
+                isMulti 
+                options={statusOptions} 
+                value={selStatuses} 
+                onChange={val => setSelStatuses(val as any[])}
+                styles={selectStyles}
+                components={animatedComponents}
+                placeholder="Filter by Status..."
                 closeMenuOnSelect={false}
               />
             </div>
