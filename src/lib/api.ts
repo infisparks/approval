@@ -384,9 +384,9 @@ export async function createRequest(
       const link = `${baseUrl}/admin/requests`; 
       
       for (const approver of approvers) {
-        if (approver.contact_number) {
+        if (approver.number) {
           await sendWhatsAppNotification(
-            approver.contact_number,
+            approver.number,
             profile.full_name,
             title,
             new Date().toLocaleDateString('en-IN'),
@@ -433,9 +433,9 @@ export async function approveRequest(requestId: string, stepOrder: number, comme
     const link = `${baseUrl}/admin/requests`;
 
     for (const approver of approvers) {
-      if (approver.contact_number) {
+      if (approver.number) {
         await sendWhatsAppNotification(
-          approver.contact_number,
+          approver.number,
           req.profiles?.full_name || 'Faculty',
           req.title,
           new Date().toLocaleDateString('en-IN'),
@@ -670,6 +670,10 @@ export async function sendWhatsAppNotification(
   date: string,
   link: string
 ): Promise<void> {
+  if (!contactNumber) {
+    console.warn("⚠️ WhatsApp ignored: Missing contact number");
+    return;
+  }
   const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY;
   console.log("WhatsApp API Key status:", apiKey ? `Present (ends with ...${apiKey.slice(-4)})` : "Missing ❌");
   if (!apiKey) {
@@ -688,7 +692,7 @@ export async function sendWhatsAppNotification(
 
   try {
     const payload = {
-      number: `91${contactNumber.replace(/\D/g, '').slice(-10)}`, // Ensure clean 10 digit number with 91 prefix
+      number: `91${String(contactNumber).replace(/\D/g, '').slice(-10)}`, // Ensure clean 10 digit number with 91 prefix
       text: messageText
     };
     

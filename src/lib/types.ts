@@ -40,7 +40,7 @@ export interface UserProfile {
   institutes?: Institute;
   institute_types?: InstituteType;
   person_types?: PersonType;
-  contact_number?: string;
+  number?: string;
 }
 
 export interface PersonType {
