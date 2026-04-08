@@ -1,17 +1,18 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { 
   BarChart3, Calendar as CalendarIcon, Search, Filter,
   CheckCircle2, RotateCcw, FileText, Download, 
-  Building2, Shapes, AppWindow, Clock, X
+  Building2, Shapes, AppWindow, Clock, X, Banknote
 } from 'lucide-react';
 import Select from 'react-select';
 import makeAnimated from 'react-select/animated';
 import AppShell from '@/components/AppShell';
+import BifurcationTable from '@/components/BifurcationTable';
 import { 
-  getAdminStats, getInstitutes, getDepartments, getCells 
+  getAdminStats, getInstitutes, getDepartments, getCells, getInstituteTypes
 } from '@/lib/api';
-import { ApprovalRequest } from '@/lib/types';
+import { ApprovalRequest, RequestApproval } from '@/lib/types';
 import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { DatePickerWithRange } from '@/components/DateRangePicker';
@@ -64,6 +65,7 @@ const selectStyles = {
   })
 };
 
+
 export default function AdminDashboard() {
   const { profile, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -74,11 +76,13 @@ export default function AdminDashboard() {
   });
   
   const [selInstitutes, setSelInstitutes] = useState<any[]>([]);
+  const [selInstituteTypes, setSelInstituteTypes] = useState<any[]>([]);
   const [selDepartments, setSelDepartments] = useState<any[]>([]);
   const [selCells, setSelCells] = useState<any[]>([]);
   const [selStatuses, setSelStatuses] = useState<any[]>([]);
 
   const [institutes, setInstitutes] = useState<any[]>([]);
+  const [instituteTypes, setInstituteTypes] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
   const [cells, setCells] = useState<any[]>([]);
   const statusOptions = [
@@ -91,22 +95,27 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<ApprovalRequest | null>(null);
 
+  const designationName = profile?.designations?.name?.toLowerCase() || '';
+  const adminRoles = ['director', 'president', 'chairman', 'ceo'];
+  const isAdmin = adminRoles.includes(designationName);
+
   useEffect(() => {
-    if (!authLoading && (!profile || (profile.designations?.rank ?? 0) < 4)) {
+    if (!authLoading && (!profile || !isAdmin)) {
       router.replace('/dashboard');
     }
-  }, [profile, authLoading, router]);
+  }, [profile, authLoading, router, isAdmin]);
 
   useEffect(() => {
     const initData = async () => {
       setLoading(true);
       try {
-        const [inst, dept, cl] = await Promise.all([
-          getInstitutes(), getDepartments(), getCells() 
+        const [inst, instT, dept, cl] = await Promise.all([
+          getInstitutes(), getInstituteTypes(), getDepartments(), getCells() 
         ]);
-        setInstitutes(inst.map(i => ({ value: i.id, label: i.name })));
-        setDepartments(dept.map(d => ({ value: d.id, label: d.name })));
-        setCells(cl.map(c => ({ value: c.id, label: c.name })));
+        setInstitutes(inst.map((i: any) => ({ value: i.id, label: i.name })));
+        setInstituteTypes(instT.map((i: any) => ({ value: i.id, label: i.name })));
+        setDepartments(dept.map((d: any) => ({ value: d.id, label: d.name })));
+        setCells(cl.map((c: any) => ({ value: c.id, label: c.name })));
         
         const initBatch = await getAdminStats({ 
           startDate: dateRange?.from ? startOfDay(dateRange.from).toISOString() : undefined, 
@@ -129,6 +138,7 @@ export default function AdminDashboard() {
         startDate: dateRange?.from ? startOfDay(dateRange.from).toISOString() : undefined,
         endDate: dateRange?.to ? endOfDay(dateRange.to).toISOString() : undefined,
         instituteIds: selInstitutes.map(i => i.value),
+        instituteTypeIds: selInstituteTypes.map(i => i.value),
         departmentIds: selDepartments.map(d => d.value),
         cellIds: selCells.map(c => c.value)
       });
@@ -153,13 +163,12 @@ export default function AdminDashboard() {
     pending: filteredRequests.filter(r => r.status === 'pending').length
   };
 
-  if (authLoading || (profile && (profile.designations?.rank ?? 0) < 4)) {
+  if (authLoading || (profile && !isAdmin)) {
     return <div className="loading-screen" style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div className="loading-spinner" /></div>;
   }
 
   return (
     <AppShell title="Internal Oversight Dashboard">
-      <>
         <div style={{ marginBottom: 32 }}>
         <div style={{ 
           background: 'linear-gradient(135deg, var(--midnight), var(--navy-light))',
@@ -216,6 +225,22 @@ export default function AdminDashboard() {
                 closeMenuOnSelect={false}
               />
             </div>
+
+            <div className="field-group">
+              <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Shapes size={12} /> School / Institute Type
+              </label>
+              <Select 
+                isMulti 
+                options={instituteTypes} 
+                value={selInstituteTypes} 
+                onChange={val => setSelInstituteTypes(val as any[])}
+                styles={selectStyles}
+                components={animatedComponents}
+                placeholder="Engineering, Pharmacy etc..."
+                closeMenuOnSelect={false}
+              />
+            </div>
             
             <div className="field-group">
               <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -266,8 +291,21 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <button onClick={handleSearch} className="btn-premium" style={{ width: '100%', height: 52, borderRadius: 12, fontSize: 16, fontWeight: 800 }}>
-            <Search size={19} /> ANALYZE DATASET
+          <button onClick={handleSearch} className="btn-premium" style={{ 
+            width: '100%', 
+            height: 56, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            gap: 12, 
+            fontSize: 15, 
+            fontWeight: 800, 
+            letterSpacing: 0.5,
+            border: 'none',
+            borderRadius: 14,
+            cursor: 'pointer'
+          }}>
+            <Search size={22} style={{ opacity: 0.8 }} /> ANALYZE DATASET
           </button>
         </div>
 
@@ -562,97 +600,97 @@ export default function AdminDashboard() {
             </div>
           )}
         </div>
-
-        {/* Professional Inspection Modal Overlay */}
-        {selectedRequest && (
-          <div 
-            style={{ 
-              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
-              background: 'rgba(10,15,30,0.7)', backdropFilter: 'blur(10px)', 
-              zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-              animation: 'fadeIn 0.3s ease'
-            }}
-            onClick={() => setSelectedRequest(null)}
-          >
-            <div 
-              style={{ 
-                background: '#fff', borderRadius: 24, width: '100%', maxWidth: 800, 
-                maxHeight: '90vh', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.25)',
-                display: 'flex', flexDirection: 'column', animation: 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
-              }}
-              onClick={e => e.stopPropagation()}
-            >
-              {/* Institutional Branding Header */}
-              <div style={{ padding: '28px 32px', background: 'linear-gradient(135deg, var(--midnight), var(--navy-light))', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative' }}>
-                <div style={{ position: 'absolute', right: 20, top: -20, opacity: 0.1 }}><FileText size={120} color="#fff" /></div>
-                <div style={{ position: 'relative', zIndex: 1 }}>
-                  <div style={{ fontSize: 10, fontWeight: 900, color: 'var(--gold)', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 6 }}>Request Inspection Panel</div>
-                  <h2 style={{ fontSize: 24, fontWeight: 800, color: '#fff', margin: 0, letterSpacing: -0.5 }}>{selectedRequest.title}</h2>
-                </div>
-                <button 
-                  onClick={() => setSelectedRequest(null)}
-                  style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s', position: 'relative', zIndex: 1 }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* Inspector Content Panes */}
-              <div style={{ padding: 40, overflowY: 'auto', flex: 1 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 24, marginBottom: 32 }}>
-                  <div style={{ background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 16, padding: 24 }}>
-                    <div style={{ fontSize: 11, fontWeight: 900, color: 'var(--slate)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Case Narrative</div>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--midnight)', marginBottom: 8, borderLeft: '4px solid var(--accent)', paddingLeft: 12 }}>{selectedRequest.content?.subject || 'Reference Subject'}</div>
-                    <div style={{ fontSize: 14, color: 'var(--slate)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{selectedRequest.content?.body || 'No detailed content provided.'}</div>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    <div style={{ background: 'rgba(16, 185, 129, 0.05)', border: '1px solid var(--emerald)', borderRadius: 16, padding: 24, textAlign: 'center' }}>
-                      <div style={{ fontSize: 10, fontWeight: 900, color: 'var(--emerald)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Fiscal Impact</div>
-                      <div style={{ fontSize: 32, fontWeight: 950, color: 'var(--emerald)', letterSpacing: -1 }}>₹{selectedRequest.has_amount ? (selectedRequest.amount || 0).toLocaleString('en-IN') : '0.00'}</div>
-                      <div style={{ fontSize: 11, color: 'var(--emerald)', fontWeight: 600, marginTop: 4 }}>Institutional Disbursement</div>
-                    </div>
-                    <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 16, padding: 20 }}>
-                      <div style={{ fontSize: 10, fontWeight: 900, color: 'var(--slate)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Origin Profile</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>{selectedRequest.profiles?.full_name?.charAt(0)}</div>
-                        <div>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--midnight)' }}>{selectedRequest.profiles?.full_name}</div>
-                          <div style={{ fontSize: 12, color: 'var(--slate)', fontWeight: 600 }}>{selectedRequest.profiles?.departments?.name}</div>
-                        </div>
-                      </div>
-                      <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f1f5f9', fontSize: 11, color: 'var(--slate)', fontWeight: 500 }}>
-                        {selectedRequest.profiles?.institutes?.name}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 32, display: 'flex', justifyContent: 'flex-end', gap: 16 }}>
-                  <button 
-                    onClick={() => setSelectedRequest(null)}
-                    style={{ padding: '12px 24px', borderRadius: 12, background: '#f1f5f9', border: 'none', color: 'var(--slate)', fontWeight: 800, fontSize: 13, cursor: 'pointer', transition: 'all 0.2s' }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#e2e8f0'}
-                    onMouseLeave={e => e.currentTarget.style.background = '#f1f5f9'}
-                  >
-                    CLOSE INSPECTOR
-                  </button>
-                  <div style={{ width: 220 }}>
-                    <DownloadPDFButton request={selectedRequest} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
+
+      {selectedRequest && (
+        <InspectionModal 
+          req={selectedRequest} 
+          onClose={() => setSelectedRequest(null)} 
+        />
+      )}
 
       <style jsx global>{`
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
       `}</style>
-    </>
-  </AppShell>
+    </AppShell>
+  );
+}
+
+function InspectionModal({ req, onClose }: { req: ApprovalRequest; onClose: () => void }) {
+  const hasChanges = req.last_reverted_step_order !== undefined;
+
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(10,15,30,0.7)', backdropFilter: 'blur(10px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, animation: 'fadeIn 0.3s ease' }} onClick={onClose}>
+      <div style={{ background: '#fff', borderRadius: 24, width: '100%', maxWidth: 900, maxHeight: '90vh', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column', animation: 'slideUp 0.4s ease' }} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: '28px 32px', background: 'linear-gradient(135deg, var(--midnight), var(--navy-light))', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ fontSize: 10, fontWeight: 900, color: 'var(--gold)', textTransform: 'uppercase', letterSpacing: 2 }}>Inspection Panel</div>
+              {hasChanges && <span style={{ padding: '2px 8px', background: 'rgba(245,158,11,0.2)', borderRadius: 6, fontSize: 9, fontWeight: 900, color: 'var(--gold)' }}>RESUBMITTED</span>}
+            </div>
+            <h2 style={{ fontSize: 24, fontWeight: 800, color: '#fff', margin: '4px 0 0' }}>{req.title}</h2>
+          </div>
+          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', cursor: 'pointer', padding: 12, borderRadius: 12 }}><X size={20}/></button>
+        </div>
+
+        <div style={{ padding: 40, overflowY: 'auto', flex: 1 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 24 }}>
+            <div style={{ background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 16, padding: 24 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--slate)', textTransform: 'uppercase', marginBottom: 12 }}>Case Narrative Details</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--midnight)', marginBottom: 8, borderLeft: '4px solid var(--accent)', paddingLeft: 12 }}>{req.content?.subject || req.title}</div>
+              
+              <div style={{ margin: '16px 0', height: 1, background: 'var(--border)', opacity: 0.5 }} />
+
+              <div style={{ fontSize: 14, color: 'var(--slate)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{req.content?.body || 'No detailed content provided.'}</div>
+
+              {req.has_amount && req.bifurcation && Array.isArray(req.bifurcation) && req.bifurcation.length > 0 && (
+                <div style={{ marginTop: 24 }}>
+                  <div style={{ fontSize: 10, fontWeight: 900, color: 'var(--slate)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
+                    Itemized Breakdown
+                  </div>
+                  <BifurcationTable data={req.bifurcation} onChange={() => {}} readOnly />
+                </div>
+              )}
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div style={{ background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(16, 185, 129, 0.02))', border: '1.5px solid var(--emerald)', borderRadius: 20, padding: 28, textAlign: 'center' }}>
+                <div style={{ fontSize: 10, fontWeight: 900, color: 'var(--emerald)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>Total Financial Impact</div>
+                <div style={{ fontSize: 36, fontWeight: 950, color: 'var(--emerald)', letterSpacing: -1.5 }}>₹{req.has_amount ? (req.amount || 0).toLocaleString('en-IN') : '0.00'}</div>
+                <div style={{ fontSize: 11, color: 'var(--emerald)', fontWeight: 800, marginTop: 4, opacity: 0.8 }}>Institutional Authorization Required</div>
+              </div>
+
+              <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 20, padding: 24 }}>
+                <div style={{ fontSize: 10, fontWeight: 900, color: 'var(--slate)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16 }}>Request Originator</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 14, background: 'var(--midnight)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 800 }}>{req.profiles?.full_name?.charAt(0)}</div>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--midnight)' }}>{req.profiles?.full_name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--slate)', fontWeight: 600 }}>{req.profiles?.departments?.name}</div>
+                  </div>
+                </div>
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #f1f5f9', fontSize: 11, color: 'var(--slate)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  {req.profiles?.institutes?.name}
+                </div>
+              </div>
+
+              <div style={{ background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 20, padding: 20 }}>
+                <div style={{ fontSize: 10, fontWeight: 900, color: 'var(--slate)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>Audit Timestamp</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--midnight)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Clock size={14} color="var(--accent)" />
+                  {new Date(req.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 32, display: 'flex', justifyContent: 'flex-end', gap: 16 }}>
+            <button onClick={onClose} style={{ padding: '0 28px', height: 48, borderRadius: 12, background: '#f1f5f9', border: 'none', color: 'var(--slate)', fontWeight: 800, fontSize: 13, cursor: 'pointer', transition: 'all 0.2s' }}>CLOSE INSPECTOR</button>
+            <div style={{ width: 240 }}><DownloadPDFButton request={req} /></div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

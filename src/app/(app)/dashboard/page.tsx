@@ -1,19 +1,20 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   AlertCircle, CheckSquare, FileText, FileCog, CheckCircle2,
   FileSignature, FileQuestion, Inbox, Clock, RotateCcw,
   XCircle, Banknote, Plus, ArrowRight, Check, Circle,
-  Download, RefreshCw,
+  Download, RefreshCw, Info, User as UserIcon
 } from 'lucide-react';
 import DownloadPDFButton from '@/components/DownloadPDFButton';
 import AppShell from '@/components/AppShell';
 import { useAuth } from '@/lib/auth-context';
+import BifurcationTable, { BifurcationItem } from '@/components/BifurcationTable';
 import {
   getPendingApprovals, getApprovalHistory, getRequestsByRequester,
-  getPendingTemplateProposals, approveRequest, rejectRequest,
-  revertRequest, resubmitRequest, approveTemplate, rejectTemplate,
+  approveRequest, rejectRequest, revertRequest, resubmitRequest,
+  getApproversByDesignation
 } from '@/lib/api';
 import { ApprovalRequest, ApprovalTemplate, RequestApproval, TemplateStep } from '@/lib/types';
 
@@ -41,6 +42,7 @@ function StatusBadge({ status }: { status: string }) {
   const label = status.toUpperCase();
   return <span className={`badge ${statusBgClass(status)}`}>{label}</span>;
 }
+
 
 // ─── Approval Modal ───────────────────────────────────────────────────────────
 
@@ -71,8 +73,7 @@ function ApprovalModal({
   };
 
   const steps = req.approval_templates?.template_steps?.sort((a, b) => a.step_order - b.step_order) || [];
-  const prevApprovals = (req.request_approvals || []).filter(a => a.step_order < req.current_step_order).sort((a, b) => b.step_order - a.step_order);
-  const previous = prevApprovals[0];
+  const hasChanges = req.last_reverted_step_order !== undefined;
 
   return (
     <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -85,21 +86,67 @@ function ApprovalModal({
           </div>
           <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: -0.5, marginBottom: 4 }}>{req.title}</div>
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)' }}>From {req.requester_name ?? req.profiles?.full_name}</div>
-          {req.has_amount && (
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 12, background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '6px 14px' }}>
-              <Banknote size={14} color="#fff" />
-              <span style={{ color: '#fff', fontWeight: 800, fontSize: 16 }}>₹ {(req.amount ?? 0).toFixed(2)}</span>
-            </div>
-          )}
+          
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 12 }}>
+            {req.has_amount && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '6px 14px' }}>
+                <Banknote size={14} color="#fff" />
+                <span style={{ color: '#fff', fontWeight: 800, fontSize: 16 }}>₹ {(req.amount ?? 0).toFixed(2)}</span>
+              </div>
+            )}
+            
+            {req.has_amount && (
+              <div style={{ 
+                padding: '6px 12px', background: req.budget_provisions ? 'rgba(16,185,129,0.15)' : 'rgba(244,63,94,0.15)', 
+                borderRadius: 10, border: `1px solid ${req.budget_provisions ? 'rgba(16,185,129,0.2)' : 'rgba(244,63,94,0.2)'}`,
+                display: 'flex', alignItems: 'center', gap: 6
+              }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: req.budget_provisions ? 'var(--emerald)' : 'var(--rose)' }} />
+                <span style={{ fontSize: 10, fontWeight: 900, color: req.budget_provisions ? 'var(--emerald)' : 'var(--rose)', letterSpacing: 0.5 }}>
+                  BUDGET {req.budget_provisions ? 'PROVISIONED' : 'NOT PROVISIONED'}
+                </span>
+              </div>
+            )}
+
+            {hasChanges && (
+              <div style={{ padding: '6px 12px', background: 'rgba(16,185,129,0.15)', borderRadius: 10, border: '1px solid rgba(16,185,129,0.2)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <CheckCircle2 size={12} color="var(--emerald)" />
+                <span style={{ fontSize: 10, fontWeight: 900, color: 'var(--emerald)', letterSpacing: 0.5 }}>REVISED & UPDATED</span>
+              </div>
+            )}
+          </div>
         </div>
+        
         <div className="modal-body">
           {error && <div className="auth-error" style={{ marginBottom: 16 }}>{error}</div>}
 
-          {/* Approval Chain history for the approver */}
+          {/* Letter content with Diff Viewer */}
+          <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: 18, marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', letterSpacing: 1, marginBottom: 6 }}>SUBJECT</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--midnight)', marginBottom: 14 }}>{req.content?.subject ?? req.title}</div>
+            
+            <div style={{ height: 1, background: 'var(--border)', marginBottom: 14 }} />
+            
+            <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', letterSpacing: 1, marginBottom: 8 }}>LETTER BODY</div>
+            <div style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--slate)', whiteSpace: 'pre-wrap' }}>
+              {req.content?.body ?? 'No body provided.'}
+            </div>
+            
+            {req.has_amount && req.bifurcation && Array.isArray(req.bifurcation) && req.bifurcation.length > 0 && (
+              <div style={{ marginTop: 20 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', letterSpacing: 1, marginBottom: 8 }}>
+                  BIFURCATION
+                </div>
+                <BifurcationTable data={req.bifurcation} onChange={() => {}} readOnly />
+              </div>
+            )}
+          </div>
+
+          {/* Approval Chain history */}
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', letterSpacing: 1.5, marginBottom: 12 }}>APPROVAL HISTORY & FEEDBACK</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {steps.filter(s => s.step_order <= req.current_step_order).map((step, idx) => {
+              {steps.filter(s => s.step_order <= req.current_step_order).map((step) => {
                 const hist = (req.request_approvals || [])
                   .filter(a => a.step_order === step.step_order)
                   .sort((a, b) => new Date(b.acted_at ?? 0).getTime() - new Date(a.acted_at ?? 0).getTime());
@@ -160,15 +207,6 @@ function ApprovalModal({
             </div>
           </div>
 
-          {/* Letter content */}
-          <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: 18, marginBottom: 16 }}>
-            <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', letterSpacing: 1, marginBottom: 6 }}>SUBJECT</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--midnight)', marginBottom: 14 }}>{req.content?.subject ?? req.title}</div>
-            <div style={{ height: 1, background: 'var(--border)', marginBottom: 14 }} />
-            <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', letterSpacing: 1, marginBottom: 8 }}>BODY</div>
-            <div style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--slate)', whiteSpace: 'pre-wrap' }}>{req.content?.body ?? 'No body provided.'}</div>
-          </div>
-
           {/* Comment */}
           <div className="field-group" style={{ marginBottom: 0 }}>
             <label className="field-label">Remarks / Feedback</label>
@@ -201,6 +239,7 @@ function RequestDetailModal({
   const [subject, setSubject] = useState(req.content?.subject ?? '');
   const [body, setBody] = useState(req.content?.body ?? '');
   const [amount, setAmount] = useState(String(req.amount ?? 0));
+  const [bifurcation, setBifurcation] = useState<BifurcationItem[]>(req.bifurcation || []);
   const [loading, setLoading] = useState(false);
 
   const steps = req.approval_templates?.template_steps?.sort((a, b) => a.step_order - b.step_order) || [];
@@ -208,7 +247,7 @@ function RequestDetailModal({
   const doResubmit = async () => {
     setLoading(true);
     try {
-      await resubmitRequest(req.id, { subject, body }, req.has_amount ? parseFloat(amount) : undefined);
+      await resubmitRequest(req.id, { subject, body }, req.has_amount ? parseFloat(amount) : undefined, req.has_amount ? bifurcation : undefined);
       onDone(); onClose();
     } catch { /* ignore */ } finally { setLoading(false); }
   };
@@ -232,9 +271,21 @@ function RequestDetailModal({
           <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: -0.5, marginBottom: 4 }}>{req.title}</div>
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)' }}>{req.template_name ?? req.approval_templates?.name}</div>
           {req.has_amount && (
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 12, background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '6px 14px' }}>
-              <Banknote size={14} color="#fff" />
-              <span style={{ color: '#fff', fontWeight: 800, fontSize: 16 }}>₹ {(req.amount ?? 0).toFixed(2)}</span>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
+               <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '6px 14px' }}>
+                <Banknote size={14} color="#fff" />
+                <span style={{ color: '#fff', fontWeight: 800, fontSize: 16 }}>₹ {(req.amount ?? 0).toFixed(2)}</span>
+              </div>
+              <div style={{ 
+                padding: '6px 12px', background: req.budget_provisions ? 'rgba(16,185,129,0.15)' : 'rgba(244,63,94,0.15)', 
+                borderRadius: 10, border: `1px solid ${req.budget_provisions ? 'rgba(16,185,129,0.2)' : 'rgba(244,63,94,0.2)'}`,
+                display: 'flex', alignItems: 'center', gap: 6
+              }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: req.budget_provisions ? 'var(--emerald)' : 'var(--rose)' }} />
+                <span style={{ fontSize: 10, fontWeight: 900, color: req.budget_provisions ? 'var(--emerald)' : 'var(--rose)', letterSpacing: 0.5 }}>
+                  BUDGET {req.budget_provisions ? 'PROVISIONED' : 'NOT PROVISIONED'}
+                </span>
+              </div>
             </div>
           )}
         </div>
@@ -248,6 +299,13 @@ function RequestDetailModal({
               <div style={{ height: 1, background: 'var(--border)', marginBottom: 14 }} />
               <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', letterSpacing: 1, marginBottom: 8 }}>BODY</div>
               <div style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--slate)', whiteSpace: 'pre-wrap' }}>{req.content?.body ?? ''}</div>
+              
+              {req.has_amount && req.bifurcation && Array.isArray(req.bifurcation) && req.bifurcation.length > 0 && (
+                <div style={{ marginTop: 20 }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', letterSpacing: 1, marginBottom: 8 }}>BIFURCATION</div>
+                  <BifurcationTable data={req.bifurcation} onChange={() => {}} readOnly />
+                </div>
+              )}
             </div>
           )}
 
@@ -266,6 +324,18 @@ function RequestDetailModal({
                 <div className="field-group">
                   <label className="field-label">Amount (₹)</label>
                   <input className="field-input" type="number" value={amount} onChange={e => setAmount(e.target.value)} />
+                  
+                  <div style={{ marginTop: 16 }}>
+                    <label className="field-label">Bifurcation / Itemized Breakdown</label>
+                    <BifurcationTable 
+                      data={bifurcation} 
+                      onChange={(newData) => {
+                        setBifurcation(newData);
+                        const total = newData.reduce((sum, item) => sum + (item.total || 0), 0);
+                        if (total > 0) setAmount(total.toString());
+                      }} 
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -379,57 +449,7 @@ function RequestDetailModal({
   );
 }
 
-// ─── Template Proposal Modal ──────────────────────────────────────────────────
 
-function TemplateProposalModal({
-  temp, onClose, onDone,
-}: { temp: ApprovalTemplate; onClose: () => void; onDone: () => void }) {
-  const [loading, setLoading] = useState<'approve' | 'reject' | null>(null);
-
-  const act = async (a: 'approve' | 'reject') => {
-    setLoading(a);
-    try {
-      if (a === 'approve') await approveTemplate(temp.id);
-      else await rejectTemplate(temp.id);
-      onDone(); onClose();
-    } finally { setLoading(null); }
-  };
-
-  const steps = temp.template_steps?.sort((a, b) => a.step_order - b.step_order) || [];
-
-  return (
-    <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <div className="modal-header">
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 4 }}>Review Template</div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: 'rgba(59,130,246,0.9)' }}>{temp.name}</div>
-          {temp.description && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 6 }}>{temp.description}</div>}
-        </div>
-        <div className="modal-body">
-          <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--slate)', letterSpacing: 1.2, marginBottom: 12 }}>WORKFLOW CHAIN</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-            {steps.map((s, i) => (
-              <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 8, background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)' }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--accent)' }}>{i + 1}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--midnight)' }}>{s.designations?.name ?? 'Approver'}</span>
-                  <span style={{ fontSize: 10, color: 'var(--slate)' }}>{s.context}</span>
-                </div>
-                {i < steps.length - 1 && <ArrowRight size={12} color="var(--slate-light)" />}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="modal-footer">
-          <button className="btn btn-outline-rose" style={{ flex: 1 }} onClick={() => act('reject')} disabled={!!loading}>{loading === 'reject' ? '...' : 'Reject'}</button>
-          <button className="btn btn-emerald" style={{ flex: 1 }} onClick={() => act('approve')} disabled={!!loading}>{loading === 'approve' ? '...' : 'Approve Template'}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Section ──────────────────────────────────────────────────────────────────
 
 function Section({ title, icon, color, children }: { title: string; icon: React.ReactNode; color: string; children: React.ReactNode }) {
   return (
@@ -509,6 +529,40 @@ function MyRequestCard({ req, onClick }: { req: ApprovalRequest; onClick: () => 
   const latestAction = (req.request_approvals || [])
     .sort((a, b) => new Date(b.acted_at || 0).getTime() - new Date(a.acted_at || 0).getTime())[0];
 
+  const [hoverStep, setHoverStep] = useState<string | null>(null);
+  const [approverNames, setApproverNames] = useState<Record<string, string[]>>({});
+  const [loadingStep, setLoadingStep] = useState<string | null>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (hoverStep && popupRef.current && !popupRef.current.contains(e.target as Node)) {
+        setHoverStep(null);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [hoverStep]);
+
+  const showApprovers = async (e: React.MouseEvent, step: TemplateStep) => {
+    e.stopPropagation();
+    if (approverNames[step.id]) {
+      setHoverStep(hoverStep === step.id ? null : step.id);
+      return;
+    }
+    setLoadingStep(step.id);
+    setHoverStep(step.id);
+    try {
+      const contextId = step.context === 'departmental' ? req.profiles?.department_id : step.context === 'institute' ? req.profiles?.institute_type_id : undefined;
+      const users = await getApproversByDesignation(step.designation_id, step.context, contextId);
+      setApproverNames(prev => ({ ...prev, [step.id]: users.map(u => u.full_name) }));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingStep(null);
+    }
+  };
+
   return (
     <div className="request-card" onClick={onClick} style={{ borderLeft: `3px solid ${statusColor(req.status)}` }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12, gap: 12 }}>
@@ -547,17 +601,89 @@ function MyRequestCard({ req, onClick }: { req: ApprovalRequest; onClick: () => 
       )}
 
       {steps.length > 0 && (
-        <div className="chain-row">
+        <div className="chain-row" style={{ flexWrap: 'wrap', rowGap: 8 }}>
           {steps.map((s, i) => {
             const done = (req.request_approvals || []).some(a => a.step_order === s.step_order && a.status === 'approved');
             return (
-              <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span className="chain-step" style={{
-                  background: done ? 'linear-gradient(135deg, var(--emerald), var(--emerald2))' : 'rgba(245,158,11,0.08)',
-                  color: done ? '#fff' : 'var(--gold)',
-                  border: `1px solid ${done ? 'transparent' : 'rgba(245,158,11,0.25)'}`,
-                }}>{s.designations?.name ?? 'Approver'}</span>
-                {i < steps.length - 1 && <ArrowRight size={9} color="var(--slate-light)" />}
+              <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 4, position: 'relative' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 0, overflow: 'hidden', borderRadius: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                   <span className="chain-step" style={{
+                    background: done ? 'linear-gradient(135deg, var(--emerald), var(--emerald2))' : 'rgba(245,158,11,0.08)',
+                    color: done ? '#fff' : 'var(--gold)',
+                    border: `1px solid ${done ? 'transparent' : 'rgba(245,158,11,0.25)'}`,
+                    borderRadius: 0,
+                    marginRight: 0,
+                    paddingRight: 8
+                  }}>
+                    {s.designations?.name ?? 'Approver'}
+                  </span>
+                  <button 
+                    onClick={(e) => showApprovers(e, s)}
+                    style={{
+                      height: 22,
+                      padding: '0 6px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: done ? 'var(--emerald2)' : 'rgba(245,158,11,0.12)',
+                      color: '#fff',
+                      border: 'none',
+                      borderLeft: `1px solid ${done ? 'rgba(255,255,255,0.2)' : 'rgba(245,158,11,0.2)'}`,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = done ? 'var(--emerald)' : 'rgba(245,158,11,0.2)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = done ? 'var(--emerald2)' : 'rgba(245,158,11,0.12)';
+                    }}
+                  >
+                    <Info size={11} strokeWidth={3} color={done ? '#fff' : 'var(--gold)'} />
+                  </button>
+                </div>
+                
+                {hoverStep === s.id && (
+                  <div 
+                    ref={popupRef}
+                    style={{
+                      position: 'absolute',
+                      bottom: 'calc(100% + 10px)',
+                      left: 0,
+                      marginBottom: 0,
+                      background: 'var(--midnight)',
+                      color: '#fff',
+                      padding: '12px 16px',
+                      borderRadius: 14,
+                      fontSize: 12,
+                      zIndex: 200,
+                      minWidth: 160,
+                      boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5), 0 8px 10px -6px rgba(0,0,0,0.5)',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+                  }}>
+                    <div style={{ fontWeight: 900, marginBottom: 8, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', fontSize: 9, letterSpacing: 1.5 }}>Step Authorized Persons</div>
+                    {loadingStep === s.id ? (
+                      <div className="animate-spin" style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.2)', borderTopColor: 'var(--accent)', borderRadius: '50%' }} />
+                    ) : approverNames[s.id]?.length ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {approverNames[s.id].map(name => (
+                          <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+                            <div style={{ width: 20, height: 20, borderRadius: 6, background: 'rgba(59,130,246,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <UserIcon size={12} color="var(--accent)" />
+                            </div>
+                            <span style={{ fontWeight: 700 }}>{name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ opacity: 0.5, fontSize: 11 }}>System route — automatic detection</div>
+                    )}
+                    <div style={{ position: 'absolute', top: '100%', left: 14, width: 0, height: 0, borderLeft: '7px solid transparent', borderRight: '7px solid transparent', borderTop: '7px solid var(--midnight)' }} />
+                  </div>
+                )}
+
+                {i < steps.length - 1 && <ArrowRight size={9} color="var(--slate-light)" style={{ margin: '0 2px' }} />}
               </div>
             );
           })}
@@ -576,15 +702,16 @@ export default function DashboardPage() {
   const [pending, setPending] = useState<ApprovalRequest[]>([]);
   const [signed, setSigned] = useState<ApprovalRequest[]>([]);
   const [myReqs, setMyReqs] = useState<ApprovalRequest[]>([]);
-  const [proposals, setProposals] = useState<ApprovalTemplate[]>([]);
   const [loadingData, setLoadingData] = useState(true);
 
   const [selectedAction, setSelectedAction] = useState<ApprovalRequest | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<ApprovalRequest | null>(null);
-  const [selectedProposal, setSelectedProposal] = useState<ApprovalTemplate | null>(null);
 
-  const isAdmin = (profile?.designations?.rank ?? 0) >= 4;
-  const isApprover = (profile?.designations?.rank ?? 0) > 1;
+  const designationName = profile?.designations?.name?.toLowerCase() || '';
+  const adminRoles = ['director', 'president', 'chairman', 'ceo'];
+  const nonApproverRoles = ['faculty', 'clerk',  ''];
+  const isAdmin = adminRoles.includes(designationName);
+  const isApprover = !nonApproverRoles.includes(designationName);
 
   const loadAll = useCallback(async () => {
     setLoadingData(true);
@@ -602,13 +729,8 @@ export default function DashboardPage() {
         setPending(results[1]);
         setSigned(results[2]);
       }
-
-      if (isAdmin) {
-        const pr = await getPendingTemplateProposals();
-        setProposals(pr);
-      }
     } finally { setLoadingData(false); }
-  }, [isAdmin, isApprover]);
+  }, [isApprover]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
@@ -702,24 +824,7 @@ export default function DashboardPage() {
                 : <div className="request-list">{pending.map(r => <ActionCard key={r.id} req={r} onClick={() => setSelectedAction(r)} />)}</div>}
             </Section>
 
-            {/* Template Proposals (admin) */}
-            {isAdmin && (
-              <Section title="Template Proposals" icon={<FileCog size={16} />} color="var(--gold)">
-                {proposals.length === 0 ? <EmptyState message="No pending template proposals." icon={<Inbox size={28} color="var(--slate-light)" />} />
-                  : <div className="request-list">{proposals.map(t => (
-                    <div key={t.id} className="request-card" onClick={() => setSelectedProposal(t)}>
-                      <div className="request-card-row">
-                        <div className="request-icon" style={{ background: 'rgba(245,158,11,0.1)' }}><FileCog size={18} color="var(--gold)" /></div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div className="request-title">{t.name}</div>
-                          <div className="request-meta">{t.template_steps?.length ?? 0} step workflow</div>
-                        </div>
-                        <CheckCircle2 size={18} color="var(--emerald)" />
-                      </div>
-                    </div>
-                  ))}</div>}
-              </Section>
-            )}
+
 
             {/* Signed by Me */}
             <Section title="Signed by Me" icon={<CheckSquare size={16} />} color="var(--accent)">
@@ -748,9 +853,6 @@ export default function DashboardPage() {
       )}
       {selectedDetail && (
         <RequestDetailModal req={selectedDetail} onClose={() => setSelectedDetail(null)} onDone={loadAll} />
-      )}
-      {selectedProposal && (
-        <TemplateProposalModal temp={selectedProposal} onClose={() => setSelectedProposal(null)} onDone={loadAll} />
       )}
     </AppShell>
   );

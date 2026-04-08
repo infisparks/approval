@@ -1,12 +1,13 @@
 export interface Department {
   id: string;
   name: string;
+  institute_type_id: string;
 }
 
 export interface Designation {
   id: string;
   name: string;
-  rank: number;
+  rank?: number;
 }
 
 export interface Institute {
@@ -17,6 +18,8 @@ export interface Institute {
 export interface InstituteType {
   id: string;
   name: string;
+  institute_id: string;
+  letterhead_url?: string;
 }
 
 export interface UserProfile {
@@ -28,10 +31,19 @@ export interface UserProfile {
   avatar_url?: string;
   institute_id?: string;
   institute_type_id?: string;
+  person_type_id?: string;
+  signature?: string;
+  is_locked?: boolean;
   designations?: Designation;
   departments?: Department;
   institutes?: Institute;
   institute_types?: InstituteType;
+  person_types?: PersonType;
+}
+
+export interface PersonType {
+  id: string;
+  name: string;
 }
 
 export interface TemplateStep {
@@ -49,6 +61,9 @@ export interface ApprovalTemplate {
   description?: string;
   status: string;
   is_active: boolean;
+  allows_amount: boolean;
+  max_amount?: number;
+  visible_to_person_types?: string[];
   template_steps?: TemplateStep[];
 }
 
@@ -92,4 +107,6 @@ export interface ApprovalRequest {
   last_reverted_step_order?: number;
   has_amount?: boolean;
   amount?: number;
+  bifurcation?: any;
+  budget_provisions?: boolean;
 }

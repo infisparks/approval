@@ -3,8 +3,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Mail, Lock, User, Building, GraduationCap, BadgeCheck, ShieldCheck, ArrowLeft } from 'lucide-react';
-import { signUp, getDepartments, getDesignations, getInstitutes, getInstituteTypes } from '@/lib/api';
-import { Department, Designation, Institute, InstituteType } from '@/lib/types';
+import { signUp, getDepartments, getDesignations, getInstitutes, getInstituteTypes, getPersonTypes } from '@/lib/api';
+import { Department, Designation, Institute, InstituteType, PersonType } from '@/lib/types';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -12,21 +12,48 @@ export default function RegisterPage() {
     fullName: '', email: '', password: '',
     departmentId: '', designationId: '',
     instituteId: '', instituteTypeId: '',
+    personTypeId: '',
   });
   const [depts, setDepts] = useState<Department[]>([]);
   const [designations, setDesignations] = useState<Designation[]>([]);
   const [institutes, setInstitutes] = useState<Institute[]>([]);
   const [instTypes, setInstTypes] = useState<InstituteType[]>([]);
+  const [personTypes, setPersonTypes] = useState<PersonType[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    Promise.all([getDepartments(), getDesignations(), getInstitutes(), getInstituteTypes()]).then(([d, des, ins, it]) => {
-      setDepts(d); setDesignations(des); setInstitutes(ins); setInstTypes(it);
-      // Auto-select AIKTC if it's the only one
-      if (ins.length === 1) setForm(f => ({ ...f, instituteId: ins[0].id }));
+    Promise.all([
+      getInstitutes(),
+      getInstituteTypes(),
+      getDepartments(),
+      getDesignations(),
+      getPersonTypes()
+    ]).then(([ins, it, d, des, pt]) => {
+      setInstitutes(ins);
+      setInstTypes(it);
+      setDepts(d);
+      setDesignations(des);
+      setPersonTypes(pt);
+      
+      if (ins.length === 1) {
+        setForm(f => ({ ...f, instituteId: ins[0].id }));
+      }
     });
   }, []);
+
+  const filteredInstTypes = instTypes.filter(it => it.institute_id === form.instituteId);
+  const filteredDepts = depts.filter(d => d.institute_type_id === form.instituteTypeId);
+
+  const handleInstituteChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setForm(f => ({ ...f, instituteId: val, instituteTypeId: '', departmentId: '' }));
+  };
+
+  const handleInstTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setForm(f => ({ ...f, instituteTypeId: val, departmentId: '' }));
+  };
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
@@ -34,12 +61,12 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!form.departmentId || !form.designationId || !form.instituteTypeId || !form.instituteId) {
+    if (!form.departmentId || !form.designationId || !form.instituteTypeId || !form.instituteId || !form.personTypeId) {
       setError('Please fill in all required fields'); return;
     }
     setLoading(true);
     try {
-      await signUp(form.email, form.password, form.fullName, form.designationId, form.departmentId, form.instituteId, form.instituteTypeId);
+      await signUp(form.email, form.password, form.fullName, form.designationId, form.departmentId, form.instituteId, form.instituteTypeId, form.personTypeId);
       router.replace('/login');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Registration failed');
@@ -85,36 +112,66 @@ export default function RegisterPage() {
             <input type="password" className="auth-input" style={{ marginBottom: 0 }} placeholder="Password" value={form.password} onChange={set('password')} required />
           </div>
 
-          <div className="auth-input-wrap" style={{ marginBottom: 12 }}>
-            <Building size={15} className="auth-input-icon" style={{ top: 14, transform: 'none' }} />
-            <select className="auth-select" style={{ marginBottom: 0 }} value={form.departmentId} onChange={set('departmentId')} required>
-              <option value="">Select Department</option>
-              {depts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
+          <div style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.03)', borderRadius: 20, border: '1px solid rgba(255,255,255,0.08)', marginBottom: 24 }}>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16 }}>Institutional Placement</div>
+            
+            <div className="auth-input-wrap" style={{ marginBottom: 12 }}>
+              <Building size={15} className="auth-input-icon" style={{ top: 14, transform: 'none' }} />
+              <select className="auth-select" style={{ marginBottom: 0 }} value={form.instituteId} onChange={handleInstituteChange} required>
+                <option value="">Select Institute</option>
+                {institutes.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+              </select>
+            </div>
+
+            <div className="auth-input-wrap" style={{ marginBottom: 12 }}>
+              <GraduationCap size={15} className="auth-input-icon" style={{ top: 14, transform: 'none' }} />
+              <select 
+                className="auth-select" 
+                style={{ marginBottom: 0, opacity: !form.instituteId ? 0.5 : 1 }} 
+                value={form.instituteTypeId} 
+                onChange={handleInstTypeChange} 
+                required 
+                disabled={!form.instituteId}
+              >
+                <option value="">Select School / Institute Type</option>
+                {filteredInstTypes.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
+              </select>
+            </div>
+
+            <div className="auth-input-wrap" style={{ marginBottom: 12 }}>
+              <Building size={15} className="auth-input-icon" style={{ top: 14, transform: 'none' }} />
+              <select 
+                className="auth-select" 
+                style={{ marginBottom: 0, opacity: !form.instituteTypeId ? 0.5 : 1 }} 
+                value={form.departmentId} 
+                onChange={set('departmentId')} 
+                required
+                disabled={!form.instituteTypeId}
+              >
+                <option value="">Select Department</option>
+                {filteredDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </div>
           </div>
 
-          <div className="auth-input-wrap" style={{ marginBottom: 12 }}>
-            <BadgeCheck size={15} className="auth-input-icon" style={{ top: 14, transform: 'none' }} />
-            <select className="auth-select" style={{ marginBottom: 0 }} value={form.designationId} onChange={set('designationId')} required>
-              <option value="">Select Designation</option>
-              {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          </div>
+          <div style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.03)', borderRadius: 20, border: '1px solid rgba(255,255,255,0.08)', marginBottom: 24 }}>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16 }}>Professional Details</div>
+            
+            <div className="auth-input-wrap" style={{ marginBottom: 12 }}>
+              <BadgeCheck size={15} className="auth-input-icon" style={{ top: 14, transform: 'none' }} />
+              <select className="auth-select" style={{ marginBottom: 0 }} value={form.designationId} onChange={set('designationId')} required>
+                <option value="">Select Designation</option>
+                {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </div>
 
-          <div className="auth-input-wrap" style={{ marginBottom: 12 }}>
-            <Building size={15} className="auth-input-icon" style={{ top: 14, transform: 'none' }} />
-            <select className="auth-select" style={{ marginBottom: 0 }} value={form.instituteId} onChange={set('instituteId')} required>
-              <option value="">Select Institute</option>
-              {institutes.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-            </select>
-          </div>
-
-          <div className="auth-input-wrap" style={{ marginBottom: 24 }}>
-            <GraduationCap size={15} className="auth-input-icon" style={{ top: 14, transform: 'none' }} />
-            <select className="auth-select" style={{ marginBottom: 0 }} value={form.instituteTypeId} onChange={set('instituteTypeId')} required>
-              <option value="">Select Institute Type</option>
-              {instTypes.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
-            </select>
+            <div className="auth-input-wrap" style={{ marginBottom: 0 }}>
+              <User size={15} className="auth-input-icon" style={{ top: 14, transform: 'none' }} />
+              <select className="auth-select" style={{ marginBottom: 0 }} value={form.personTypeId} onChange={set('personTypeId')} required>
+                <option value="">Select Staff Category</option>
+                {personTypes.map(pt => <option key={pt.id} value={pt.id}>{pt.name}</option>)}
+              </select>
+            </div>
           </div>
 
           <button type="submit" className="auth-btn" disabled={loading} id="register-submit">

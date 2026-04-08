@@ -57,31 +57,67 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         {/* Nav */}
         <nav className="sidebar-nav">
           <div className="sidebar-section-label">Navigation</div>
-          {navItems.map(({ icon: Icon, label, href }) => (
+          {[
+            { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard', color: 'var(--accent)' },
+            { icon: Files, label: 'Letter Templates', href: '/templates', color: 'var(--emerald)' },
+            { icon: User, label: 'My Profile', href: '/profile', color: 'var(--gold)' },
+          ].map(({ icon: Icon, label, href, color }) => (
             <Link
               key={href}
               href={href}
               className={`sidebar-nav-item ${pathname === href ? 'active' : ''}`}
               onClick={onClose}
+              style={{
+                '--item-accent': color
+              } as any}
             >
-              <Icon size={18} />
+              <div className="nav-icon-container">
+                <Icon size={18} />
+              </div>
               {label}
             </Link>
           ))}
 
-          {profile && (profile.designations?.rank ?? 0) >= 4 && (
-            <>
-              <div className="sidebar-section-label" style={{ marginTop: 20 }}>Administration</div>
+          {profile && ['director', 'president', 'chairman', 'ceo'].includes(profile.designations?.name?.toLowerCase() || '') && (
+              <>
+                <div className="sidebar-section-label" style={{ marginTop: 24 }}>Administration</div>
               <Link
                 href="/admin"
                 className={`sidebar-nav-item ${pathname === '/admin' ? 'active' : ''}`}
                 onClick={onClose}
-                style={{ color: 'var(--gold)', fontWeight: 700 }}
+                style={{ '--item-accent': 'var(--gold)' } as any}
               >
-                <BarChart3 size={18} />
+                <div className="nav-icon-container">
+                  <BarChart3 size={18} />
+                </div>
                 Admin Dashboard
               </Link>
-
+              {profile.designations?.name?.toLowerCase().includes('director') && (
+                <>
+                  <Link
+                    href="/admin/templates"
+                    className={`sidebar-nav-item ${pathname === '/admin/templates' ? 'active' : ''}`}
+                    onClick={onClose}
+                    style={{ '--item-accent': 'var(--emerald2)' } as any}
+                  >
+                    <div className="nav-icon-container">
+                      <Files size={18} />
+                    </div>
+                    Workflows Approval
+                  </Link>
+                  <Link
+                    href="/admin/organization"
+                    className={`sidebar-nav-item ${pathname === '/admin/organization' ? 'active' : ''}`}
+                    onClick={onClose}
+                    style={{ '--item-accent': 'var(--accent)' } as any}
+                  >
+                    <div className="nav-icon-container">
+                      <User size={18} />
+                    </div>
+                    Organization Mgmt
+                  </Link>
+                </>
+              )}
             </>
           )}
         </nav>

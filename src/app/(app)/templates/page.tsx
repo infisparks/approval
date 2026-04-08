@@ -2,9 +2,57 @@
 import { useState, useEffect, useRef } from 'react';
 import { Files, Search, Plus, FileText, ArrowRight, Trash2, PlusCircle, X, CheckCircle2 } from 'lucide-react';
 import AppShell from '@/components/AppShell';
-import { getTemplates, getDesignations, proposeTemplate, createRequest, getCells } from '@/lib/api';
-import { ApprovalTemplate, Designation, Cell } from '@/lib/types';
+import { getTemplates, getDesignations, proposeTemplate, createRequest, getCells, getPersonTypes } from '@/lib/api';
+import { ApprovalTemplate, Designation, Cell, PersonType } from '@/lib/types';
 import { useAuth } from '@/lib/auth-context';
+import BifurcationTable, { BifurcationItem } from '@/components/BifurcationTable';
+import Select from 'react-select';
+import makeAnimated from 'react-select/animated';
+
+const animatedComponents = makeAnimated();
+
+const selectStyles = {
+  control: (base: any, state: any) => ({
+    ...base,
+    minHeight: '42px',
+    borderRadius: '10px',
+    border: state.isFocused ? '2px solid var(--accent)' : '1px solid var(--border)',
+    boxShadow: 'none',
+    '&:hover': {
+      borderColor: state.isFocused ? 'var(--accent)' : '#cbd5e1',
+    },
+    background: '#fff',
+    fontSize: '14px',
+    fontWeight: '500'
+  }),
+  multiValue: (base: any) => ({
+    ...base,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderRadius: '6px',
+    padding: '2px 4px',
+  }),
+  multiValueLabel: (base: any) => ({
+    ...base,
+    color: 'var(--accent)',
+    fontWeight: '700',
+    fontSize: '11px',
+    textTransform: 'uppercase'
+  }),
+  multiValueRemove: (base: any) => ({
+    ...base,
+    color: 'var(--accent)',
+    ':hover': {
+      backgroundColor: 'var(--accent)',
+      color: '#fff',
+      borderRadius: '4px'
+    },
+  }),
+  placeholder: (base: any) => ({
+    ...base,
+    color: 'var(--slate-light)',
+  })
+};
+
 
 // ─── Compose Letter Modal ──────────────────────────────────────────────────────
 
@@ -21,6 +69,8 @@ function ComposeModal({ template, onClose, onDone }: { template: ApprovalTemplat
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [bifurcation, setBifurcation] = useState<BifurcationItem[]>([]);
+  const [budgetProvisions, setBudgetProvisions] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (profile?.institute_id) {
@@ -45,9 +95,14 @@ function ComposeModal({ template, onClose, onDone }: { template: ApprovalTemplat
   );
 
   const handleSubmit = async () => {
-    if (!subject.trim() || !body.trim() || !cellId) { 
-      setError('Please fill in all fields, including the receiving Cell.'); 
+    if (!subject.trim() || !body.trim() || !cellId || budgetProvisions === null) { 
+      setError('Please fill in all fields and confirm Budget Provisions status.'); 
       return; 
+    }
+    const val = parseFloat(amount) || 0;
+    if (hasAmount && template.max_amount && val > template.max_amount) {
+      setError(`Requested amount (₹${val}) cannot exceed the maximum allowed for this template (₹${template.max_amount.toLocaleString('en-IN')}).`);
+      return;
     }
     setError(''); setLoading(true);
     try {
@@ -55,7 +110,10 @@ function ComposeModal({ template, onClose, onDone }: { template: ApprovalTemplat
         template.id, subject,
         { subject, body, type: template.name },
         cellId,
-        hasAmount, hasAmount ? parseFloat(amount) || 0 : 0,
+        hasAmount, 
+        hasAmount ? parseFloat(amount) || 0 : 0,
+        hasAmount ? bifurcation : null,
+        budgetProvisions ?? true
       );
       onDone(); onClose();
     } catch (e: unknown) {
@@ -195,23 +253,71 @@ function ComposeModal({ template, onClose, onDone }: { template: ApprovalTemplat
             <textarea className="field-input" rows={7} placeholder="Enter your detailed request or reason..." value={body} onChange={e => setBody(e.target.value)} />
           </div>
 
-          {/* Amount toggle */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', marginBottom: hasAmount ? 12 : 0 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--midnight)' }}>Include Budget / Amount?</div>
-              <div style={{ fontSize: 12, color: 'var(--slate)' }}>For budget requests or reimbursements</div>
+          <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: '16px 18px', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+               <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--midnight)' }}>Budget Provisions *</div>
+                  <div style={{ fontSize: 12, color: 'var(--slate)' }}>Is there an existing budget provision for this request?</div>
+               </div>
+               <div style={{ display: 'flex', background: 'rgba(0,0,0,0.05)', padding: 4, borderRadius: 10, gap: 4 }}>
+                  <button 
+                    onClick={() => setBudgetProvisions(true)}
+                    style={{ 
+                      padding: '6px 16px', borderRadius: 8, fontSize: 12, fontWeight: 800, cursor: 'pointer', border: 'none',
+                      background: budgetProvisions === true ? 'var(--emerald)' : 'transparent',
+                      color: budgetProvisions === true ? '#fff' : 'var(--slate)',
+                      transition: 'all 0.2s'
+                    }}
+                  >YES</button>
+                  <button 
+                    onClick={() => setBudgetProvisions(false)}
+                    style={{ 
+                      padding: '6px 16px', borderRadius: 8, fontSize: 12, fontWeight: 800, cursor: 'pointer', border: 'none',
+                      background: budgetProvisions === false ? 'var(--rose)' : 'transparent',
+                      color: budgetProvisions === false ? '#fff' : 'var(--slate)',
+                      transition: 'all 0.2s'
+                    }}
+                  >NO</button>
+               </div>
             </div>
-            <label className="switch">
-              <input type="checkbox" checked={hasAmount} onChange={e => setHasAmount(e.target.checked)} />
-              <span className="switch-slider" />
-            </label>
           </div>
 
-          {hasAmount && (
+          {/* Amount toggle — only shown if template permits it */}
+          {template.allows_amount && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', marginBottom: hasAmount ? 12 : 0 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--midnight)' }}>Include Budget / Amount?</div>
+                <div style={{ fontSize: 12, color: 'var(--slate)' }}>For budget requests or reimbursements</div>
+              </div>
+              <label className="switch">
+                <input type="checkbox" checked={hasAmount} onChange={e => setHasAmount(e.target.checked)} />
+                <span className="switch-slider" />
+              </label>
+            </div>
+          )}
+
+          {template.allows_amount && hasAmount && (
             <div className="field-group" style={{ marginTop: 12 }}>
-              <label className="field-label">Requested Amount (₹)</label>
+              <label className="field-label">
+                Requested Amount (₹) 
+                {template.max_amount && <span style={{ color: 'var(--rose)', marginLeft: 8 }}>(Max: ₹{template.max_amount.toLocaleString('en-IN')})</span>}
+              </label>
               <input className="field-input" type="number" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)}
                 style={{ fontSize: 20, fontWeight: 700 }} />
+              
+              <div style={{ marginTop: 16 }}>
+                <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  Bifurcation / Itemized Breakdown
+                </label>
+                <BifurcationTable 
+                  data={bifurcation} 
+                  onChange={(newData) => {
+                    setBifurcation(newData);
+                    const total = newData.reduce((sum, item) => sum + (item.total || 0), 0);
+                    if (total > 0) setAmount(total.toString());
+                  }} 
+                />
+              </div>
             </div>
           )}
         </div>
@@ -233,11 +339,18 @@ function ProposeModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
   const [steps, setSteps] = useState<{ designation_id: string; context: string }[]>([]);
+  const [allowsAmount, setAllowsAmount] = useState(false);
+  const [maxAmount, setMaxAmount] = useState('');
   const [designations, setDesignations] = useState<Designation[]>([]);
+  const [personTypes, setPersonTypes] = useState<PersonType[]>([]);
+  const [selectedPersonTypes, setSelectedPersonTypes] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => { getDesignations().then(setDesignations); }, []);
+  useEffect(() => { 
+    getDesignations().then(setDesignations); 
+    getPersonTypes().then(setPersonTypes);
+  }, []);
 
   const addStep = () => setSteps(s => [...s, { designation_id: '', context: 'departmental' }]);
   const removeStep = (i: number) => setSteps(s => s.filter((_, idx) => idx !== i));
@@ -249,7 +362,15 @@ function ProposeModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
     if (steps.length === 0 || steps.some(s => !s.designation_id)) { setError('All steps must have a designation.'); return; }
     setError(''); setLoading(true);
     try {
-      await proposeTemplate(name, desc, steps);
+      const parsedMax = parseFloat(maxAmount);
+      await proposeTemplate(
+        name, 
+        desc, 
+        steps, 
+        allowsAmount, 
+        selectedPersonTypes.map(p => p.value),
+        allowsAmount && !isNaN(parsedMax) ? parsedMax : undefined
+      );
       onDone(); onClose();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to propose template');
@@ -272,6 +393,45 @@ function ProposeModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
           <div className="field-group">
             <label className="field-label">Description</label>
             <textarea className="field-input" rows={2} placeholder="Brief description of when to use this template" value={desc} onChange={e => setDesc(e.target.value)} />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', marginBottom: 16 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--midnight)' }}>Permission to Add Budget/Amount</div>
+              <div style={{ fontSize: 12, color: 'var(--slate)' }}>Enable if requests using this template require financial tracking</div>
+            </div>
+            <label className="switch">
+              <input type="checkbox" checked={allowsAmount} onChange={e => setAllowsAmount(e.target.checked)} />
+              <span className="switch-slider" />
+            </label>
+          </div>
+
+          {allowsAmount && (
+            <div className="field-group" style={{ marginBottom: 16 }}>
+              <label className="field-label">Maximum Allowed Amount (₹) (Optional)</label>
+              <input 
+                className="field-input" 
+                type="number" 
+                placeholder="e.g., 50000" 
+                value={maxAmount} 
+                onChange={e => setMaxAmount(e.target.value)} 
+              />
+              <div style={{ fontSize: 11, color: 'var(--slate)', marginTop: 4 }}>Leave blank for no upper limit</div>
+            </div>
+          )}
+
+          <div className="field-group" style={{ marginBottom: 16 }}>
+            <label className="field-label">Visible To (Staff Categories)</label>
+            <Select 
+              isMulti 
+              options={personTypes.map(p => ({ value: p.id, label: p.name }))} 
+              value={selectedPersonTypes} 
+              onChange={val => setSelectedPersonTypes(val as any[])}
+              styles={selectStyles}
+              components={animatedComponents}
+              placeholder="Leave empty for all staff categories, or select specific ones..."
+              closeMenuOnSelect={false}
+            />
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -354,6 +514,7 @@ function TemplateCard({ template, onClick }: { template: ApprovalTemplate; onCli
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function TemplatesPage() {
+  const { profile } = useAuth();
   const [templates, setTemplates] = useState<ApprovalTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -367,9 +528,19 @@ export default function TemplatesPage() {
 
   useEffect(() => { load(); }, []);
 
-  const filtered = search
-    ? templates.filter(t => t.name.toLowerCase().includes(search.toLowerCase()) || (t.description?.toLowerCase().includes(search.toLowerCase()) ?? false))
-    : templates;
+  const filtered = templates.filter(t => {
+    // Filter by person type visibility
+    if (t.visible_to_person_types && t.visible_to_person_types.length > 0) {
+      if (!profile?.person_type_id || !t.visible_to_person_types.includes(profile.person_type_id)) {
+        return false;
+      }
+    }
+    // Filter by search string
+    if (search) {
+      return t.name.toLowerCase().includes(search.toLowerCase()) || (t.description?.toLowerCase().includes(search.toLowerCase()) ?? false);
+    }
+    return true;
+  });
 
   return (
     <AppShell

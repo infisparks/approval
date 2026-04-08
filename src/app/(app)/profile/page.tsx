@@ -1,6 +1,6 @@
 'use client';
 import { useRouter } from 'next/navigation';
-import { Mail, Briefcase, Building2, LogOut, MapPin, School } from 'lucide-react';
+import { Mail, Briefcase, Building2, LogOut, MapPin, School, User } from 'lucide-react';
 import AppShell from '@/components/AppShell';
 import { useAuth } from '@/lib/auth-context';
 import { signOut } from '@/lib/api';
@@ -72,6 +72,7 @@ export default function ProfilePage() {
         <div className="profile-info-card">
           <InfoRow icon={<School size={16} color="var(--emerald)" />} label="Institute Name" value={profile?.institutes?.name ?? ''} />
           <InfoRow icon={<MapPin size={16} color="var(--emerald)" />} label="Institute Type" value={profile?.institute_types?.name ?? ''} />
+          <InfoRow icon={<User size={16} color="var(--amber)" />} label="Staff Category" value={profile?.person_types?.name ?? ''} />
         </div>
       </div>
 
