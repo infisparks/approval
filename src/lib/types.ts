@@ -34,6 +34,7 @@ export interface UserProfile {
   person_type_id?: string;
   signature?: string;
   is_locked?: boolean;
+  is_admin?: boolean;
   designations?: Designation;
   departments?: Department;
   institutes?: Institute;
@@ -52,6 +53,7 @@ export interface TemplateStep {
   step_order: number;
   designation_id: string;
   context: string;
+  role_label?: string;
   designations?: Designation;
 }
 
@@ -65,6 +67,7 @@ export interface ApprovalTemplate {
   max_amount?: number;
   visible_to_person_types?: string[];
   template_steps?: TemplateStep[];
+  requester_role_label?: string;
 }
 
 export interface RequestApproval {

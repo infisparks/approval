@@ -39,6 +39,15 @@ export async function getDepartments(): Promise<Department[]> {
   return data || [];
 }
 
+export async function getAllDepartmentsAdmin(): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('departments')
+    .select('*, institute_types(*)')
+    .order('name');
+  if (error) throw error;
+  return data || [];
+}
+
 export async function getDesignations(): Promise<Designation[]> {
   const { data, error } = await supabase.from('designations').select('*').order('name');
   if (error) throw error;
@@ -87,10 +96,27 @@ export async function rejectTemplate(templateId: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function proposeTemplate(name: string, description: string, steps: Array<{designation_id: string; context: string}>, allowsAmount = false, visible_to_person_types: string[] = [], maxAmount?: number): Promise<void> {
+export async function proposeTemplate(
+  name: string, 
+  description: string, 
+  steps: Array<{designation_id: string; context: string; role_label?: string}>, 
+  allowsAmount = false, 
+  visible_to_person_types: string[] = [], 
+  maxAmount?: number,
+  requesterRoleLabel?: string
+): Promise<void> {
   const { data: template, error } = await supabase
     .from('approval_templates')
-    .insert({ name, description, status: 'pending', is_active: false, allows_amount: allowsAmount, max_amount: maxAmount, visible_to_person_types })
+    .insert({ 
+      name, 
+      description, 
+      status: 'pending', 
+      is_active: false, 
+      allows_amount: allowsAmount, 
+      max_amount: maxAmount, 
+      visible_to_person_types,
+      requester_role_label: requesterRoleLabel || 'Prepared by'
+    })
     .select()
     .single();
   if (error) throw error;
@@ -100,6 +126,7 @@ export async function proposeTemplate(name: string, description: string, steps: 
     step_order: i + 1,
     designation_id: s.designation_id,
     context: s.context,
+    role_label: s.role_label,
   }));
   const { error: stepsError } = await supabase.from('template_steps').insert(stepRows);
   if (stepsError) throw stepsError;
@@ -122,10 +149,26 @@ export async function updateTemplateActiveStatus(templateId: string, is_active: 
   if (error) throw error;
 }
 
-export async function updateTemplate(templateId: string, name: string, description: string, steps: Array<{designation_id: string; context: string}>, allowsAmount: boolean, visible_to_person_types: string[], maxAmount?: number): Promise<void> {
+export async function updateTemplate(
+  templateId: string, 
+  name: string, 
+  description: string, 
+  steps: Array<{designation_id: string; context: string; role_label?: string}>, 
+  allowsAmount: boolean, 
+  visible_to_person_types: string[], 
+  maxAmount?: number,
+  requesterRoleLabel?: string
+): Promise<void> {
   const { error } = await supabase
     .from('approval_templates')
-    .update({ name, description, allows_amount: allowsAmount, max_amount: maxAmount, visible_to_person_types })
+    .update({ 
+      name, 
+      description, 
+      allows_amount: allowsAmount, 
+      max_amount: maxAmount, 
+      visible_to_person_types,
+      requester_role_label: requesterRoleLabel
+    })
     .eq('id', templateId);
   if (error) throw error;
 
@@ -138,6 +181,7 @@ export async function updateTemplate(templateId: string, name: string, descripti
     step_order: i + 1,
     designation_id: s.designation_id,
     context: s.context,
+    role_label: s.role_label,
   }));
   const { error: stepsError } = await supabase.from('template_steps').insert(stepRows);
   if (stepsError) throw stepsError;
@@ -506,4 +550,17 @@ export async function getApproversByDesignation(designationId: string, context: 
   const { data, error } = await query;
   if (error) throw error;
   return data || [];
+}
+
+export async function createDepartment(name: string, instituteTypeId: string): Promise<void> {
+  const { error } = await supabase.from('departments').insert({ name, institute_type_id: instituteTypeId });
+  if (error) throw error;
+}
+
+export async function updateDepartment(id: string, name: string, instituteTypeId: string): Promise<void> {
+  const { error } = await supabase
+    .from('departments')
+    .update({ name, institute_type_id: instituteTypeId })
+    .eq('id', id);
+  if (error) throw error;
 }

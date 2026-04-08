@@ -171,6 +171,7 @@ function ApprovalModal({
                           {isCurrent ? <Clock size={12} color="#fff" /> : <Check size={12} color="#fff" />}
                         </div>
                         <div>
+                          <div style={{ fontSize: 9, color: 'var(--slate)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 1 }}>{step.role_label || 'Approver'}</div>
                           <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--midnight)' }}>{step.designations?.name ?? 'Approver'}</div>
                           <div style={{ fontSize: 9, color: isCurrent ? 'var(--gold)' : 'var(--emerald)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                             {isCurrent ? 'YOUR CURRENT STEP' : 'OFFICIALLY SIGNED'}
@@ -367,7 +368,10 @@ function RequestDetailModal({
                   <div className="timeline-content">
                     <div className="timeline-card">
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: hist.length ? 12 : 0 }}>
-                        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--midnight)' }}>{step.designations?.name ?? 'Approver'}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--slate)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{step.role_label || 'Approver'}</span>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--midnight)' }}>{step.designations?.name ?? 'Approver'}</span>
+                        </div>
                         {isApproved && <span className="badge badge-emerald">APPROVED</span>}
                         {isReverted && <span className="badge badge-rose">REVERTED</span>}
                         {isRejected && <span className="badge badge-rose">REJECTED</span>}
@@ -615,7 +619,10 @@ function MyRequestCard({ req, onClick }: { req: ApprovalRequest; onClick: () => 
                     marginRight: 0,
                     paddingRight: 8
                   }}>
-                    {s.designations?.name ?? 'Approver'}
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: 7, fontWeight: 900, color: done ? 'rgba(255,255,255,0.7)' : 'var(--slate)', textTransform: 'uppercase', letterSpacing: 0.3, lineHeight: 1 }}>{s.role_label || 'Approve'}</span>
+                      <span style={{ lineHeight: 1.2 }}>{s.designations?.name ?? 'Approver'}</span>
+                    </div>
                   </span>
                   <button 
                     onClick={(e) => showApprovers(e, s)}
@@ -707,10 +714,9 @@ export default function DashboardPage() {
   const [selectedAction, setSelectedAction] = useState<ApprovalRequest | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<ApprovalRequest | null>(null);
 
+  const isAdmin = profile?.is_admin;
   const designationName = profile?.designations?.name?.toLowerCase() || '';
-  const adminRoles = ['director', 'president', 'chairman', 'ceo'];
-  const nonApproverRoles = ['faculty', 'clerk',  ''];
-  const isAdmin = adminRoles.includes(designationName);
+  const nonApproverRoles = ['faculty', 'clerk', ''];
   const isApprover = !nonApproverRoles.includes(designationName);
 
   const loadAll = useCallback(async () => {

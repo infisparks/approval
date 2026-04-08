@@ -59,9 +59,10 @@ const selectStyles = {
 function EditTemplateModal({ temp, onClose, onDone }: { temp: ApprovalTemplate; onClose: () => void; onDone: () => void }) {
   const [name, setName] = useState(temp.name);
   const [desc, setDesc] = useState(temp.description || '');
-  const [steps, setSteps] = useState<{ designation_id: string; context: string }[]>(
-    (temp.template_steps || []).map(s => ({ designation_id: s.designation_id, context: s.context }))
+  const [steps, setSteps] = useState<{ designation_id: string; context: string; role_label: string }[]>(
+    (temp.template_steps || []).map(s => ({ designation_id: s.designation_id, context: s.context, role_label: s.role_label || '' }))
   );
+  const [requesterRoleLabel, setRequesterRoleLabel] = useState(temp.requester_role_label || 'Prepared by');
   const [allowsAmount, setAllowsAmount] = useState(temp.allows_amount);
   const [maxAmount, setMaxAmount] = useState(temp.max_amount || '');
   
@@ -86,7 +87,7 @@ function EditTemplateModal({ temp, onClose, onDone }: { temp: ApprovalTemplate; 
     });
   }, [temp]);
 
-  const addStep = () => setSteps(s => [...s, { designation_id: '', context: 'departmental' }]);
+  const addStep = () => setSteps(s => [...s, { designation_id: '', context: 'departmental', role_label: '' }]);
   const removeStep = (i: number) => setSteps(s => s.filter((_, idx) => idx !== i));
   const updateStep = (i: number, field: string, value: string) =>
     setSteps(s => s.map((st, idx) => idx === i ? { ...st, [field]: value } : st));
@@ -104,7 +105,8 @@ function EditTemplateModal({ temp, onClose, onDone }: { temp: ApprovalTemplate; 
         steps, 
         allowsAmount, 
         selectedPersonTypes.map(p => p.value),
-        allowsAmount && !isNaN(parsedMax) ? parsedMax : undefined
+        allowsAmount && !isNaN(parsedMax) ? parsedMax : undefined,
+        requesterRoleLabel
       );
       onDone(); onClose();
     } catch (e: any) {
@@ -170,6 +172,21 @@ function EditTemplateModal({ temp, onClose, onDone }: { temp: ApprovalTemplate; 
             />
           </div>
 
+          <div className="field-group" style={{ marginBottom: 20 }}>
+            <label className="field-label">Requester Role Label</label>
+            <select 
+              className="field-input" 
+              value={requesterRoleLabel} 
+              onChange={e => setRequesterRoleLabel(e.target.value)}
+            >
+              <option value="Prepared by">Prepared by</option>
+              <option value="Drafted by">Drafted by</option>
+              <option value="Proposed by">Proposed by</option>
+              <option value="Initiated by">Initiated by</option>
+            </select>
+            <div style={{ fontSize: 11, color: 'var(--slate)', marginTop: 4 }}>This label will appear under the requester's name in the PDF.</div>
+          </div>
+
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, marginTop: 20 }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--midnight)' }}>Approval Steps</span>
             <button className="btn btn-outline btn-sm" onClick={addStep} style={{ gap: 6 }}>
@@ -178,20 +195,49 @@ function EditTemplateModal({ temp, onClose, onDone }: { temp: ApprovalTemplate; 
           </div>
 
           {steps.map((step, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: '12px 14px' }}>
-              <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--midnight)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 }}>{i + 1}</div>
-              <select className="field-input" style={{ marginBottom: 0, flex: 2 }} value={step.designation_id} onChange={e => updateStep(i, 'designation_id', e.target.value)}>
-                <option value="">Select Designation</option>
-                {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-              </select>
-              <select className="field-input" style={{ marginBottom: 0, flex: 1 }} value={step.context} onChange={e => updateStep(i, 'context', e.target.value)}>
-                <option value="departmental">Departmental</option>
-                <option value="institute">Institute-level</option>
-                <option value="global">Global</option>
-              </select>
-              <button onClick={() => removeStep(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--rose)', padding: 4 }}>
-                <Trash2 size={16} />
-              </button>
+            <div key={i} style={{ marginBottom: 14, background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--midnight)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 }}>{i + 1}</div>
+                <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: 'var(--midnight)' }}>Approval Step ${i + 1}</div>
+                <button onClick={() => removeStep(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--rose)', padding: 4 }}>
+                  <Trash2 size={16} />
+                </button>
+              </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr', gap: 10, marginBottom: 10 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Designation</label>
+                  <select className="field-input" style={{ marginBottom: 0 }} value={step.designation_id} onChange={e => updateStep(i, 'designation_id', e.target.value)}>
+                    <option value="">Select Designation</option>
+                    {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Scope</label>
+                  <select className="field-input" style={{ marginBottom: 0 }} value={step.context} onChange={e => updateStep(i, 'context', e.target.value)}>
+                    <option value="departmental">Departmental</option>
+                    <option value="institute">Institute-level</option>
+                    <option value="global">Global</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Role Label</label>
+                <select 
+                  className="field-input" 
+                  value={step.role_label} 
+                  onChange={e => updateStep(i, 'role_label', e.target.value)} 
+                  style={{ marginBottom: 0 }}
+                >
+                  <option value="">Default (Designation Name)</option>
+                  <option value="Prepared by">Prepared by</option>
+                  <option value="Verified by">Verified by</option>
+                  <option value="Forwarded by">Forwarded by</option>
+                  <option value="Recommended by">Recommended by</option>
+                  <option value="Approved by">Approved by</option>
+                </select>
+              </div>
             </div>
           ))}
         </div>
@@ -218,7 +264,7 @@ export default function AdminTemplatesPage() {
   const [editing, setEditing] = useState<ApprovalTemplate | null>(null);
 
   useEffect(() => {
-    if (profile && !profile.designations?.name?.toLowerCase().includes('director')) {
+    if (profile && !profile.is_admin) {
       router.replace('/dashboard');
     }
   }, [profile, router]);
@@ -236,7 +282,7 @@ export default function AdminTemplatesPage() {
   };
 
   useEffect(() => {
-    if (profile && profile.designations?.name?.toLowerCase().includes('director')) {
+    if (profile && profile.is_admin) {
       load();
     }
   }, [profile]);
@@ -272,7 +318,7 @@ export default function AdminTemplatesPage() {
     }
   };
 
-  if (!profile || !profile.designations?.name?.toLowerCase().includes('director')) return null;
+  if (!profile || !profile.is_admin) return null;
 
   const filteredTemplates = templates.filter(t => {
     // 1. Search filter
@@ -379,9 +425,12 @@ export default function AdminTemplatesPage() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginBottom: 4, marginTop: 4 }}>
                           {(t.template_steps?.sort((a,b) => a.step_order - b.step_order) || []).map((s, i, arr) => (
                             <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--midnight)', background: 'rgba(10,15,30,0.06)', padding: '2px 6px', borderRadius: 4 }}>
-                                {s.designations?.name ?? 'Approver'}
-                              </span>
+                              <div style={{ display: 'flex', flexDirection: 'column', background: 'rgba(10,15,30,0.06)', padding: '2px 8px', borderRadius: 6 }}>
+                                <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--slate)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{s.role_label || 'Approver'}</span>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--midnight)' }}>
+                                  {s.designations?.name ?? 'Approver'}
+                                </span>
+                              </div>
                               {i < arr.length - 1 && <ArrowRight size={10} color="var(--slate-light)" />}
                             </div>
                           ))}

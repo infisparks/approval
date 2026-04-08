@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ShieldCheck, LayoutDashboard, Files, User, LogOut, X, BarChart3 } from 'lucide-react';
+import { ShieldCheck, LayoutDashboard, Files, User, LogOut, X, BarChart3, Building } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { signOut } from '@/lib/api';
 import { useRouter } from 'next/navigation';
@@ -78,7 +78,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             </Link>
           ))}
 
-          {profile && ['director', 'president', 'chairman', 'ceo'].includes(profile.designations?.name?.toLowerCase() || '') && (
+          {profile?.is_admin && (
               <>
                 <div className="sidebar-section-label" style={{ marginTop: 24 }}>Administration</div>
               <Link
@@ -92,8 +92,6 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
                 </div>
                 Admin Dashboard
               </Link>
-              {profile.designations?.name?.toLowerCase().includes('director') && (
-                <>
                   <Link
                     href="/admin/templates"
                     className={`sidebar-nav-item ${pathname === '/admin/templates' ? 'active' : ''}`}
@@ -116,8 +114,17 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
                     </div>
                     Organization Mgmt
                   </Link>
-                </>
-              )}
+                  <Link
+                    href="/admin/departments"
+                    className={`sidebar-nav-item ${pathname === '/admin/departments' ? 'active' : ''}`}
+                    onClick={onClose}
+                    style={{ '--item-accent': 'var(--accent2)' } as any}
+                  >
+                    <div className="nav-icon-container">
+                      <Building size={18} />
+                    </div>
+                    Departments Mgmt
+                  </Link>
             </>
           )}
         </nav>

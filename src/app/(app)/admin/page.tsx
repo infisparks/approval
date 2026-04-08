@@ -81,10 +81,10 @@ export default function AdminDashboard() {
   const [selCells, setSelCells] = useState<any[]>([]);
   const [selStatuses, setSelStatuses] = useState<any[]>([]);
 
-  const [institutes, setInstitutes] = useState<any[]>([]);
-  const [instituteTypes, setInstituteTypes] = useState<any[]>([]);
-  const [departments, setDepartments] = useState<any[]>([]);
-  const [cells, setCells] = useState<any[]>([]);
+  const [rawInstitutes, setRawInstitutes] = useState<any[]>([]);
+  const [rawInstituteTypes, setRawInstituteTypes] = useState<any[]>([]);
+  const [rawDepartments, setRawDepartments] = useState<any[]>([]);
+  const [rawCells, setRawCells] = useState<any[]>([]);
   const statusOptions = [
     { value: 'approved', label: 'Approved' },
     { value: 'reverted', label: 'Reverted' },
@@ -95,9 +95,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<ApprovalRequest | null>(null);
 
-  const designationName = profile?.designations?.name?.toLowerCase() || '';
-  const adminRoles = ['director', 'president', 'chairman', 'ceo'];
-  const isAdmin = adminRoles.includes(designationName);
+  const isAdmin = profile?.is_admin;
 
   useEffect(() => {
     if (!authLoading && (!profile || !isAdmin)) {
@@ -112,10 +110,10 @@ export default function AdminDashboard() {
         const [inst, instT, dept, cl] = await Promise.all([
           getInstitutes(), getInstituteTypes(), getDepartments(), getCells() 
         ]);
-        setInstitutes(inst.map((i: any) => ({ value: i.id, label: i.name })));
-        setInstituteTypes(instT.map((i: any) => ({ value: i.id, label: i.name })));
-        setDepartments(dept.map((d: any) => ({ value: d.id, label: d.name })));
-        setCells(cl.map((c: any) => ({ value: c.id, label: c.name })));
+        setRawInstitutes(inst);
+        setRawInstituteTypes(instT);
+        setRawDepartments(dept);
+        setRawCells(cl);
         
         const initBatch = await getAdminStats({ 
           startDate: dateRange?.from ? startOfDay(dateRange.from).toISOString() : undefined, 
@@ -162,6 +160,19 @@ export default function AdminDashboard() {
     reverted: filteredRequests.filter(r => r.status === 'reverted').length,
     pending: filteredRequests.filter(r => r.status === 'pending').length
   };
+
+  // Derived Options
+  const instituteOptions = rawInstitutes.map(i => ({ value: i.id, label: i.name }));
+  
+  const instituteTypeOptions = rawInstituteTypes
+    .filter(it => selInstitutes.length === 0 || selInstitutes.some(inst => inst.value === it.institute_id))
+    .map(it => ({ value: it.id, label: it.name }));
+
+  const departmentOptions = rawDepartments
+    .filter(d => selInstituteTypes.length === 0 || selInstituteTypes.some(it => it.value === d.institute_type_id))
+    .map(d => ({ value: d.id, label: d.name }));
+
+  const cellOptions = rawCells.map(c => ({ value: c.id, label: c.name }));
 
   if (authLoading || (profile && !isAdmin)) {
     return <div className="loading-screen" style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div className="loading-spinner" /></div>;
@@ -216,9 +227,13 @@ export default function AdminDashboard() {
               </label>
               <Select 
                 isMulti 
-                options={institutes} 
+                options={instituteOptions} 
                 value={selInstitutes} 
-                onChange={val => setSelInstitutes(val as any[])}
+                onChange={val => {
+                  setSelInstitutes(val as any[]);
+                  setSelInstituteTypes([]);
+                  setSelDepartments([]);
+                }}
                 styles={selectStyles}
                 components={animatedComponents}
                 placeholder="Select Institutes..."
@@ -232,9 +247,12 @@ export default function AdminDashboard() {
               </label>
               <Select 
                 isMulti 
-                options={instituteTypes} 
+                options={instituteTypeOptions} 
                 value={selInstituteTypes} 
-                onChange={val => setSelInstituteTypes(val as any[])}
+                onChange={val => {
+                  setSelInstituteTypes(val as any[]);
+                  setSelDepartments([]);
+                }}
                 styles={selectStyles}
                 components={animatedComponents}
                 placeholder="Engineering, Pharmacy etc..."
@@ -248,7 +266,7 @@ export default function AdminDashboard() {
               </label>
               <Select 
                 isMulti 
-                options={departments} 
+                options={departmentOptions} 
                 value={selDepartments} 
                 onChange={val => setSelDepartments(val as any[])}
                 styles={selectStyles}
@@ -264,7 +282,7 @@ export default function AdminDashboard() {
               </label>
               <Select 
                 isMulti 
-                options={cells} 
+                options={cellOptions} 
                 value={selCells} 
                 onChange={val => setSelCells(val as any[])}
                 styles={selectStyles}

@@ -137,9 +137,12 @@ function ComposeModal({ template, onClose, onDone }: { template: ApprovalTemplat
             <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               {steps.map((s, i) => (
                 <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ padding: '4px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', fontSize: 12, fontWeight: 600, color: '#fff' }}>
-                    {s.designations?.name ?? 'Approver'}
-                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', padding: '4px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
+                    <span style={{ fontSize: 8, fontWeight: 900, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{s.role_label || 'Approver'}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>
+                      {s.designations?.name ?? 'Approver'}
+                    </span>
+                  </div>
                   {i < steps.length - 1 && <ArrowRight size={10} color="rgba(255,255,255,0.4)" />}
                 </div>
               ))}
@@ -338,7 +341,8 @@ function ComposeModal({ template, onClose, onDone }: { template: ApprovalTemplat
 function ProposeModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
-  const [steps, setSteps] = useState<{ designation_id: string; context: string }[]>([]);
+  const [steps, setSteps] = useState<{ designation_id: string; context: string; role_label: string }[]>([]);
+  const [requesterRoleLabel, setRequesterRoleLabel] = useState('Prepared by');
   const [allowsAmount, setAllowsAmount] = useState(false);
   const [maxAmount, setMaxAmount] = useState('');
   const [designations, setDesignations] = useState<Designation[]>([]);
@@ -352,7 +356,7 @@ function ProposeModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
     getPersonTypes().then(setPersonTypes);
   }, []);
 
-  const addStep = () => setSteps(s => [...s, { designation_id: '', context: 'departmental' }]);
+  const addStep = () => setSteps(s => [...s, { designation_id: '', context: 'departmental', role_label: '' }]);
   const removeStep = (i: number) => setSteps(s => s.filter((_, idx) => idx !== i));
   const updateStep = (i: number, field: string, value: string) =>
     setSteps(s => s.map((st, idx) => idx === i ? { ...st, [field]: value } : st));
@@ -369,7 +373,8 @@ function ProposeModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
         steps, 
         allowsAmount, 
         selectedPersonTypes.map(p => p.value),
-        allowsAmount && !isNaN(parsedMax) ? parsedMax : undefined
+        allowsAmount && !isNaN(parsedMax) ? parsedMax : undefined,
+        requesterRoleLabel
       );
       onDone(); onClose();
     } catch (e: unknown) {
@@ -434,6 +439,21 @@ function ProposeModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
             />
           </div>
 
+          <div className="field-group" style={{ marginBottom: 20 }}>
+            <label className="field-label">Requester Role Label</label>
+            <select 
+              className="field-input" 
+              value={requesterRoleLabel} 
+              onChange={e => setRequesterRoleLabel(e.target.value)}
+            >
+              <option value="Prepared by">Prepared by</option>
+              <option value="Drafted by">Drafted by</option>
+              <option value="Proposed by">Proposed by</option>
+              <option value="Initiated by">Initiated by</option>
+            </select>
+            <div style={{ fontSize: 11, color: 'var(--slate)', marginTop: 4 }}>This label will appear under the requester's name in the PDF.</div>
+          </div>
+
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--midnight)' }}>Approval Steps</span>
             <button className="btn btn-outline btn-sm" onClick={addStep} style={{ gap: 6 }}>
@@ -448,20 +468,49 @@ function ProposeModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
           )}
 
           {steps.map((step, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: '12px 14px' }}>
-              <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--midnight)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 }}>{i + 1}</div>
-              <select className="field-input" style={{ marginBottom: 0, flex: 2 }} value={step.designation_id} onChange={e => updateStep(i, 'designation_id', e.target.value)}>
-                <option value="">Select Designation</option>
-                {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-              </select>
-              <select className="field-input" style={{ marginBottom: 0, flex: 1 }} value={step.context} onChange={e => updateStep(i, 'context', e.target.value)}>
-                <option value="departmental">Departmental</option>
-                <option value="institute">Institute-level</option>
-                <option value="global">Global</option>
-              </select>
-              <button onClick={() => removeStep(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--rose)', padding: 4 }}>
-                <Trash2 size={16} />
-              </button>
+            <div key={i} style={{ marginBottom: 14, background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--midnight)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 }}>{i + 1}</div>
+                <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: 'var(--midnight)' }}>Approval Step ${i + 1}</div>
+                <button onClick={() => removeStep(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--rose)', padding: 4 }}>
+                  <Trash2 size={16} />
+                </button>
+              </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr', gap: 10, marginBottom: 10 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Designation</label>
+                  <select className="field-input" style={{ marginBottom: 0 }} value={step.designation_id} onChange={e => updateStep(i, 'designation_id', e.target.value)}>
+                    <option value="">Select Designation</option>
+                    {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Scope</label>
+                  <select className="field-input" style={{ marginBottom: 0 }} value={step.context} onChange={e => updateStep(i, 'context', e.target.value)}>
+                    <option value="departmental">Departmental</option>
+                    <option value="institute">Institute-level</option>
+                    <option value="global">Global</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Role Label</label>
+                <select 
+                  className="field-input" 
+                  value={step.role_label} 
+                  onChange={e => updateStep(i, 'role_label', e.target.value)} 
+                  style={{ marginBottom: 0 }}
+                >
+                  <option value="">Default (Designation Name)</option>
+                  <option value="Prepared by">Prepared by</option>
+                  <option value="Verified by">Verified by</option>
+                  <option value="Forwarded by">Forwarded by</option>
+                  <option value="Recommended by">Recommended by</option>
+                  <option value="Approved by">Approved by</option>
+                </select>
+              </div>
             </div>
           ))}
         </div>
@@ -499,9 +548,12 @@ function TemplateCard({ template, onClick }: { template: ApprovalTemplate; onCli
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           {steps.map((s, i) => (
             <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ padding: '4px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, color: 'var(--midnight)', background: 'rgba(10,15,30,0.05)', border: '1px solid rgba(10,15,30,0.08)' }}>
-                {s.designations?.name ?? 'Approver'}
-              </span>
+              <div style={{ display: 'flex', flexDirection: 'column', background: 'rgba(10,15,30,0.05)', padding: '4px 10px', borderRadius: 8, border: '1px solid rgba(10,15,30,0.08)' }}>
+                 <span style={{ fontSize: 8, fontWeight: 800, color: 'var(--slate)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{s.role_label || 'Approver'}</span>
+                 <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--midnight)' }}>
+                   {s.designations?.name ?? 'Approver'}
+                 </span>
+              </div>
               {i < steps.length - 1 && <ArrowRight size={10} color="var(--slate-light)" />}
             </div>
           ))}
@@ -546,9 +598,11 @@ export default function TemplatesPage() {
     <AppShell
       title="Letter Templates"
       actions={
-        <button id="propose-template-btn" className="topbar-btn topbar-btn-primary" onClick={() => setShowPropose(true)}>
-          <Plus size={16} /> Propose Template
-        </button>
+        profile?.is_admin && (
+          <button id="propose-template-btn" className="topbar-btn topbar-btn-primary" onClick={() => setShowPropose(true)}>
+            <Plus size={16} /> Propose Template
+          </button>
+        )
       }
     >
       {/* Search */}
@@ -576,8 +630,8 @@ export default function TemplatesPage() {
         <div className="empty-state">
           <div className="empty-state-icon"><Files size={32} color="var(--slate-light)" /></div>
           <div className="empty-state-title">{search ? 'No templates match your search' : 'No active templates'}</div>
-          <p className="empty-state-text">{search ? 'Try a different search term.' : 'Propose a new workflow template to get started.'}</p>
-          {!search && (
+          <p className="empty-state-text">{search ? 'Try a different search term.' : 'Contact an administrator to create a new template.'}</p>
+          {!search && profile?.is_admin && (
             <button className="btn btn-primary" style={{ marginTop: 20 }} onClick={() => setShowPropose(true)}>
               <Plus size={16} /> Propose New Template
             </button>

@@ -430,12 +430,12 @@ export default function OrganizationPage() {
   const [tab, setTab] = useState<'profiles'|'designations'|'person_types'>('profiles');
 
   useEffect(() => {
-    if (profile && !profile.designations?.name?.toLowerCase().includes('director')) {
+    if (profile && !profile.is_admin) {
       router.replace('/dashboard');
     }
   }, [profile, router]);
 
-  if (!profile || !profile.designations?.name?.toLowerCase().includes('director')) return null;
+  if (!profile || !profile.is_admin) return null;
 
   return (
     <AppShell title="Organization & Access Management">
