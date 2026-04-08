@@ -577,3 +577,37 @@ select.field-input { cursor: pointer; appearance: none; background-image: url("d
   .modal { border-radius: 20px 20px 0 0; margin-bottom: 0; align-self: flex-end; }
   .overlay { padding: 0; align-items: flex-end; }
 }
+
+/* ── Collection & Admin Page Patterns ── */
+.admin-page { padding: 32px; animation: fadeIn 0.4s ease-out; }
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; }
+.header-content .page-title { font-size: 28px; font-weight: 900; letter-spacing: -1px; color: var(--midnight); margin-bottom: 4px; }
+.header-content .page-subtitle { font-size: 14px; color: var(--slate); font-weight: 500; }
+
+.stat-card {
+  display: flex; align-items: center; gap: 20px;
+  background: var(--card); border-radius: var(--radius-lg);
+  padding: 24px; border: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+}
+.stat-icon {
+  width: 56px; height: 56px; border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+}
+.stat-info { display: flex; flex-direction: column; gap: 4px; }
+.stat-label { font-size: 12px; font-weight: 700; color: var(--slate); text-transform: uppercase; letter-spacing: 0.5px; }
+.stat-value { font-size: 24px; font-weight: 900; color: var(--midnight); letter-spacing: -0.5px; }
+
+.form-group { margin-bottom: 20px; }
+.form-group label { display: block; font-size: 11px; font-weight: 800; color: var(--slate); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+.form-select, .form-input {
+  width: 100%; padding: 12px 16px; border-radius: 12px; border: 1.5px solid var(--border);
+  background: white; font-size: 14px; font-weight: 600; font-family: var(--font);
+  transition: all 0.2s; outline: none;
+}
+.form-select:focus, .form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(59,130,246,0.1); }
+.form-select:disabled { background: #f1f5f9; cursor: not-allowed; opacity: 0.7; }
+
+.modal-backdrop { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 1000; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }

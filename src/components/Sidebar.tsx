@@ -125,6 +125,17 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
                     </div>
                     Departments Mgmt
                   </Link>
+                  <Link
+                    href="/admin/collection"
+                    className={`sidebar-nav-item ${pathname === '/admin/collection' ? 'active' : ''}`}
+                    onClick={onClose}
+                    style={{ '--item-accent': 'var(--emerald)' } as any}
+                  >
+                    <div className="nav-icon-container">
+                      <BarChart3 size={18} />
+                    </div>
+                    Collection Mgmt
+                  </Link>
             </>
           )}
         </nav>

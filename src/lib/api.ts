@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Department, Designation, UserProfile, ApprovalTemplate, ApprovalRequest, Institute, InstituteType, Cell, PersonType } from './types';
+import { Department, Designation, UserProfile, ApprovalTemplate, ApprovalRequest, Institute, InstituteType, Cell, PersonType, AcademicYear, StudyYear, FeeCollection } from './types';
 
 export async function getCurrentProfile(): Promise<UserProfile | null> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -311,7 +311,7 @@ export async function createRequest(
   // 1. Get requester profile with rank
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, email, designations(rank)')
+    .select('full_name, email, department_id, institute_type_id, designations(rank)')
     .eq('id', user.id)
     .single();
   
@@ -366,12 +366,46 @@ export async function createRequest(
     }));
     await supabase.from('request_approvals').insert(autoApprovals);
   }
+
+  // 6. WhatsApp Notification to next approvers
+  if (!isFullyApproved) {
+    const nextStep = steps.find((s: any) => s.step_order === currentStep);
+    if (nextStep) {
+      const approvers = await getApproversByDesignation(
+        nextStep.designation_id, 
+        nextStep.context, 
+        nextStep.context === 'departmental' ? (profile as any).department_id : (profile as any).institute_type_id
+      );
+      
+      console.log(`[Notification Debug] Found ${approvers.length} potential approvers for step:`, nextStep);
+      console.log(`[Notification Debug] Approver data:`, approvers);
+      
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://approval.infispark.in';
+      const link = `${baseUrl}/admin/requests`; 
+      
+      for (const approver of approvers) {
+        if (approver.contact_number) {
+          await sendWhatsAppNotification(
+            approver.contact_number,
+            profile.full_name,
+            title,
+            new Date().toLocaleDateString('en-IN'),
+            link
+          );
+        }
+      }
+    }
+  }
 }
 
 export async function approveRequest(requestId: string, stepOrder: number, comments: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
-  const { data: req } = await supabase.from('approval_requests').select('*, approval_templates(template_steps(*))').eq('id', requestId).single();
+  const { data: req } = await supabase
+    .from('approval_requests')
+    .select('*, approval_templates(template_steps(*)), profiles(*)')
+    .eq('id', requestId)
+    .single();
   if (!req) throw new Error('Request not found');
   const steps = req.approval_templates?.template_steps?.sort((a: { step_order: number }, b: { step_order: number }) => a.step_order - b.step_order) || [];
   const nextStep = steps.find((s: { step_order: number }) => s.step_order === stepOrder + 1);
@@ -383,6 +417,33 @@ export async function approveRequest(requestId: string, stepOrder: number, comme
     current_step_order: nextStep ? stepOrder + 1 : stepOrder,
     status: nextStep ? 'pending' : 'approved',
   }).eq('id', requestId);
+
+  // WhatsApp Notification to next approvers
+  if (nextStep) {
+    const approvers = await getApproversByDesignation(
+      nextStep.designation_id,
+      nextStep.context,
+      nextStep.context === 'departmental' ? req.profiles?.department_id : req.profiles?.institute_type_id
+    );
+
+    console.log(`[Approval Flow] Found ${approvers.length} next approvers for requestId: ${requestId}`);
+    console.log(`[Approval Flow] Approver details:`, approvers);
+
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://approval.infispark.in';
+    const link = `${baseUrl}/admin/requests`;
+
+    for (const approver of approvers) {
+      if (approver.contact_number) {
+        await sendWhatsAppNotification(
+          approver.contact_number,
+          req.profiles?.full_name || 'Faculty',
+          req.title,
+          new Date().toLocaleDateString('en-IN'),
+          link
+        );
+      }
+    }
+  }
 }
 
 export async function getAdminStats(filters: {
@@ -563,4 +624,91 @@ export async function updateDepartment(id: string, name: string, instituteTypeId
     .update({ name, institute_type_id: instituteTypeId })
     .eq('id', id);
   if (error) throw error;
+}
+
+export async function getAcademicYears(): Promise<AcademicYear[]> {
+  const { data, error } = await supabase.from('academic_years').select('*').order('name', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getStudyYears(): Promise<StudyYear[]> {
+  const { data, error } = await supabase.from('study_years').select('*').order('rank', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getFeeCollections(filters?: {
+  institute_id?: string;
+  institute_type_id?: string;
+  department_id?: string;
+  academic_year_id?: string;
+  study_year_id?: string;
+}): Promise<FeeCollection[]> {
+  let query = supabase.from('fee_collections').select('*, institutes(*), institute_types(*), departments(*), academic_years(*), study_years(*)');
+  
+  if (filters?.institute_id) query = query.eq('institute_id', filters.institute_id);
+  if (filters?.institute_type_id) query = query.eq('institute_type_id', filters.institute_type_id);
+  if (filters?.department_id) query = query.eq('department_id', filters.department_id);
+  if (filters?.academic_year_id) query = query.eq('academic_year_id', filters.academic_year_id);
+  if (filters?.study_year_id) query = query.eq('study_year_id', filters.study_year_id);
+
+  const { data, error } = await query.order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function addFeeCollection(collection: Omit<FeeCollection, 'id' | 'created_at'>): Promise<void> {
+  const { error } = await supabase.from('fee_collections').insert(collection);
+  if (error) throw error;
+}
+
+export async function sendWhatsAppNotification(
+  contactNumber: string,
+  facultyName: string,
+  heading: string,
+  date: string,
+  link: string
+): Promise<void> {
+  const apiKey = process.env.NEXT_PUBLIC_WHATSAPP_API_KEY;
+  console.log("WhatsApp API Key status:", apiKey ? `Present (ends with ...${apiKey.slice(-4)})` : "Missing ❌");
+  if (!apiKey) {
+    console.error("❌ WhatsApp API Key missing");
+    return;
+  }
+
+  const messageText = `*Approval Request Pending* 📝\n\nHello,\nAn approval request is waiting for your review.\n\n*Subject:* ${heading}\n*Faculty:* ${facultyName}\n*Date:* ${date}\n\n*Review Link:* ${link}\n\n_Sent via Institutional Approval System_`;
+
+  console.log(`Sending WhatsApp to ${contactNumber}:`, {
+    facultyName,
+    heading,
+    date,
+    link
+  });
+
+  try {
+    const payload = {
+      number: `91${contactNumber.replace(/\D/g, '').slice(-10)}`, // Ensure clean 10 digit number with 91 prefix
+      text: messageText
+    };
+    
+    console.log("WhatsApp Payload:", payload);
+
+    const response = await fetch("https://evo.infispark.in/message/sendText/mudassir", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": apiKey
+      },
+      body: JSON.stringify(payload),
+    });
+    
+    if (response.ok) {
+      console.log(`✅ WhatsApp notification sent to ${contactNumber}`);
+    } else {
+      console.error("❌ WhatsApp Response Error:", await response.text());
+    }
+  } catch (error) {
+    console.error("❌ WhatsApp Error:", error);
+  }
 }

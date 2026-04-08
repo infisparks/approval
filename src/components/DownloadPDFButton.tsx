@@ -88,18 +88,24 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
             <!-- MODERN HEADER -->
             <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 30px; border-bottom: 1.5px solid #0f172a; padding-bottom: 15px;">
               <div style="max-width: 65%;">
-                <div style="background: #0f172a; color: #fff; display: inline-block; padding: 5px 12px; border-radius: 4px; margin-bottom: 15px;">
-                  <p style="margin: 0; font-size: 9px; font-weight: 900; letter-spacing: 2.5px; text-transform: uppercase;">INSTITUTIONAL AUTHORIZATION</p>
+                <div style="margin-bottom: 15px;">
+                  <p style="margin: 0; color: #2563eb; font-size: 10px; font-weight: 950; letter-spacing: 1.5px; text-transform: uppercase;">Reference No: ${request.reference_id || verificationId}</p>
                 </div>
-                <h1 style="margin: 0; color: #0f172a; font-size: 28px; font-weight: 950; line-height: 1.1; letter-spacing: -1px;">Approval Certificate<br/><span style="color: #2563eb;">Official Reference</span></h1>
-                <div style="margin-top: 20px; display: flex; gap: 25px;">
+                <h1 style="margin: 0; color: #0f172a; font-size: 28px; font-weight: 950; line-height: 1.1; letter-spacing: -1px;">Approval Certificate<br/><span style="color: #000; font-size: 22px; letter-spacing: 0px;">Submitted for Management Approval</span></h1>
+                <div style="margin-top: 20px; display: flex; gap: 35px;">
                   <div>
-                    <p style="margin: 0; color: #94a3b8; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Verification ID</p>
-                    <p style="margin: 3px 0 0; color: #0f172a; font-family: monospace; font-size: 13px; font-weight: 800;">${verificationId}</p>
+                    <p style="margin: 0; color: #94a3b8; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Generate Date</p>
+                    <p style="margin: 3px 0 0; color: #0f172a; font-size: 12px; font-weight: 800;">${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                   </div>
                   <div>
-                    <p style="margin: 0; color: #94a3b8; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Issue Date</p>
-                    <p style="margin: 3px 0 0; color: #0f172a; font-size: 13px; font-weight: 800;">${new Date(request.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                    <p style="margin: 0; color: #94a3b8; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Approve Date</p>
+                    <p style="margin: 3px 0 0; color: #0f172a; font-size: 12px; font-weight: 800;">
+                      ${request.status === 'approved' 
+                        ? (request.request_approvals?.filter(a => a.status === 'approved').sort((a, b) => new Date(b.acted_at || 0).getTime() - new Date(a.acted_at || 0).getTime())[0]?.acted_at 
+                            ? new Date(request.request_approvals.filter(a => a.status === 'approved').sort((a, b) => new Date(b.acted_at || 0).getTime() - new Date(a.acted_at || 0).getTime())[0].acted_at!).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                            : 'N/A')
+                        : 'PENDING'}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -107,14 +113,14 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
                 <div style="padding: 6px; background: transparent; border: 1.5px solid rgba(15,23,42,0.1); border-radius: 12px; box-shadow: none;">
                   <img src="${qrCodeDataUrl}" alt="QR" style="width: 80px; height: 80px; display: block;" />
                 </div>
-                <p style="margin: 0; color: #94a3b8; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Scan to Verify Document</p>
+                <p style="margin: 0; color: #94a3b8; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Secure Verification QR</p>
               </div>
             </div>
 
             <!-- PRIMARY INFORMATION -->
-            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 35px; margin-bottom: 40px; background: transparent;">
+            <div class="pdf-item" style="display: grid; grid-template-columns: 2fr 1fr; gap: 35px; margin-bottom: 40px; background: transparent;">
               <div style="background: transparent; border-left: 5px solid #0f172a; padding: 25px; border-radius: 0 10px 10px 0;">
-                <p style="margin: 0 0 8px; color: #94a3b8; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Subject Title</p>
+                <p style="margin: 0 0 8px; color: #2563eb; font-size: 11px; font-weight: 950; text-transform: uppercase; letter-spacing: 1.5px;">Subject Title</p>
                 <h2 style="margin: 0 0 15px; color: #0f172a; font-size: 19px; font-weight: 900; line-height: 1.3; letter-spacing: -0.2px;">${request.title}</h2>
                 <div style="display: flex; gap: 25px; background: transparent;">
                   <div>
@@ -143,19 +149,21 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
 
             <!-- STATEMENT BODY -->
             <div style="margin-bottom: 45px; background: transparent;">
-              <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px; background: transparent;">
+              <div class="pdf-item" style="display: flex; align-items: center; gap: 15px; margin-bottom: 12px; background: transparent;">
                 <div style="height: 1.5px; flex: 1; background: rgba(15,23,42,0.1);"></div>
-                <p class="pdf-item" style="margin: 0; color: #64748b; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px;">Case Statement & Justification</p>
+                <p style="margin: 0; color: #64748b; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px;">Case Statement & Justification</p>
                 <div style="height: 1.5px; flex: 1; background: rgba(15,23,42,0.1);"></div>
               </div>
               <div style="background: transparent; padding: 0 10px; border-left: 2px solid rgba(15,23,42,0.1); margin-left: 5px;">
-                <h3 class="pdf-item" style="margin: 0 0 15px; font-size: 16px; font-weight: 850; color: #0f172a; letter-spacing: -0.3px;">${request.content?.subject || 'Reference Application'}</h3>
-                <div class="pdf-item" style="color: #334155; font-size: 12px; line-height: 1.8; white-space: pre-wrap; font-weight: 450;">${request.content?.body || 'No detailed content provided.'}</div>
+                <h3 class="pdf-item" style="margin: 0 0 8px; font-size: 15px; font-weight: 850; color: #0f172a; letter-spacing: -0.3px;">${request.content?.subject || 'Reference Application'}</h3>
+                <div style="color: #334155; font-size: 11.5px; line-height: 1.55; white-space: pre-wrap; font-weight: 450;">
+                  ${(request.content?.body || 'No detailed content provided.').split('\n').map((p: string) => p.trim() ? `<div class="pdf-item" style="margin: 0;">${p}</div>` : '<div style="height: 8px;"></div>').join('')}
+                </div>
               </div>
               
               ${request.has_amount && request.bifurcation && Array.isArray(request.bifurcation) && request.bifurcation.length > 0 ? `
-                <div style="margin-top: 30px; background: transparent;">
-                  <p class="pdf-item" style="margin: 0 0 12px; color: #64748b; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px;">Financial Bifurcation & GST Breakdown</p>
+                <div class="pdf-item" style="margin-top: 30px; background: transparent;">
+                  <p style="margin: 0 0 12px; color: #64748b; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px;">Financial Bifurcation & GST Breakdown</p>
                   <table style="width: 100%; border-collapse: collapse; border: 1.5px solid rgba(15,23,42,0.1); border-radius: 8px; overflow: hidden; font-size: 11px; background: transparent;">
                     <thead>
                       <tr style="background: rgba(15,23,42,0.03); border-bottom: 1.5px solid rgba(15,23,42,0.1);">
@@ -167,7 +175,7 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
                     </thead>
                     <tbody style="background: transparent;">
                       ${request.bifurcation.map((item: any) => `
-                        <tr class="pdf-item" style="border-bottom: 1px solid rgba(15,23,42,0.05); background: transparent;">
+                        <tr style="border-bottom: 1px solid rgba(15,23,42,0.05); background: transparent;">
                           <td style="padding: 10px 15px; color: #1e293b; font-weight: 600;">${item.description}</td>
                           <td style="padding: 10px 15px; text-align: right; color: #1e293b;">${Number(item.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           <td style="padding: 10px 15px; text-align: right; color: #16a34a; font-weight: 600;">${item.gstRate}% (₹${Number(item.gstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })})</td>
@@ -192,55 +200,103 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
                 <p style="margin: 0; color: #0f172a; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px;">Official Endorsement Ledger</p>
                 <p style="margin: 0; color: #94a3b8; font-size: 9px; font-weight: 700; text-transform: uppercase;">Digital Authentication Board</p>
               </div>
-              <div style="padding: 25px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; background: transparent;">
-                ${steps.map(step => {
-                  const hist = approvals.filter(a => a.step_order === step.step_order);
-                  const latest = hist[hist.length - 1];
-                  if (!latest && step.step_order > request.current_step_order) return '';
+              <div style="padding: 25px; display: flex; flex-direction: column; gap: 30px; background: transparent;">
+                ${(() => {
+                  const roleOrder = ['Prepared by', 'Verified by', 'Forwarded by', 'Recommended by', 'Approved by'];
+                  const signatories: any[] = [];
+                  
+                  // 1. Add Requester
+                  const requesterRole = request.approval_templates?.requester_role_label || 'Prepared by';
+                  signatories.push({
+                    role: requesterRole,
+                    name: request.requester_name || request.profiles?.full_name || '',
+                    designation: request.profiles?.designations?.name || '',
+                    signature: request.profiles?.signature,
+                    status: 'APPROVED',
+                    date: request.created_at,
+                    comments: ''
+                  });
 
-                  return `
-                    <div class="pdf-item" style="background: transparent; border: 1px solid rgba(15,23,42,0.08); border-radius: 10px; padding: 15px; display: flex; flex-direction: column; gap: 10px; min-height: 150px; position: relative; z-index: 1;">
-                      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <p style="margin: 0; color: #94a3b8; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${step.role_label || step.designations?.name || 'Signatory'}</p>
-                        <div style="transform: scale(0.85); transform-origin: top right;">
-                          ${getStatusBadge(latest?.status?.toUpperCase() || 'PENDING')}
-                        </div>
+                  // 2. Add Approvers
+                  steps.forEach(step => {
+                    const hist = approvals.filter(a => a.step_order === step.step_order);
+                    const latest = hist[hist.length - 1];
+                    if (!latest && step.step_order > request.current_step_order) return;
+                    
+                    signatories.push({
+                      role: step.role_label || step.designations?.name || 'Signatory',
+                      name: latest?.profiles?.full_name || 'Await Decision',
+                      designation: latest?.profiles?.designations?.name || step.designations?.name || '',
+                      signature: latest?.profiles?.signature,
+                      status: latest?.status || 'PENDING',
+                      date: latest?.acted_at,
+                      comments: latest?.comments || ''
+                    });
+                  });
+
+                  // 3. Group by Role
+                  const groups: Record<string, any[]> = {};
+                  signatories.forEach(s => {
+                    if (!groups[s.role]) groups[s.role] = [];
+                    groups[s.role].push(s);
+                  });
+
+                  // 4. Sort Groups
+                  const sortedRoles = Object.keys(groups).sort((a, b) => {
+                    const idxA = roleOrder.indexOf(a);
+                    const idxB = roleOrder.indexOf(b);
+                    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                    if (idxA !== -1) return -1;
+                    if (idxB !== -1) return 1;
+                    return a.localeCompare(b);
+                  });
+
+                  // 5. Render Groups
+                  return sortedRoles.map(role => `
+                    <div class="pdf-item" style="background: transparent;">
+                      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                        <span style="font-size: 8px; font-weight: 900; color: #2563eb; text-transform: uppercase; letter-spacing: 1px; background: rgba(37,99,235,0.05); padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(37,99,235,0.1);">${role}</span>
+                        <div style="height: 1px; flex: 1; background: rgba(15,23,42,0.1); min-width: 10px;"></div>
                       </div>
-                      
-                      ${latest?.profiles?.signature ? `
-                        <div style="height: 95px; display: flex; align-items: center; justify-content: center; margin: 4px 0;">
-                          <img src="${latest.profiles.signature}" style="max-height: 90px; max-width: 100%; object-fit: contain; filter: grayscale(1) contrast(1.2);" />
-                        </div>
-                      ` : `
-                        <div style="min-height: 95px; display: flex; flex-direction: column; justify-content: center;">
-                          <p style="margin: 0; color: #0f172a; font-size: 13px; font-weight: 800;">${latest?.profiles?.full_name || 'Await Decision'}</p>
-                        </div>
-                      `}
-                      
-                      <p style="margin: 0; color: #64748b; font-size: 8px; font-weight: 600; font-style: italic; line-height: 1.2; opacity: 0.9;">
-                        ${latest?.comments 
-                          ? `"${latest.comments}"` 
-                          : (!latest || latest.status === 'pending' 
-                              ? '<span style="opacity: 0.25;">Pending...</span>' 
-                              : '<span style="opacity: 0.25;">Official Decision Rendered.</span>')
-                        }
-                      </p>
-                      
-                      <div style="margin-top: auto; padding-top: 8px; border-top: 1px solid rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center;">
-                        <span style="font-size: 7.5px; color: #94a3b8; font-weight: 800; letter-spacing: 0.5px;">UNIPORT AUTH</span>
-                        <span style="font-size: 8px; color: #94a3b8; font-weight: 800;">${latest?.acted_at ? new Date(latest.acted_at).toLocaleDateString('en-IN') : '--/--/--'}</span>
+                      <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;">
+                        ${groups[role].map(s => `
+                          <div style="background: transparent; border: 1px solid rgba(15,23,42,0.08); border-radius: 8px; padding: 10px 8px; display: flex; flex-direction: column; gap: 4px; min-height: 70px; width: 172px; box-sizing: border-box; text-align: center; align-items: center;">
+                            <div style="width: 100%;">
+                              <p style="margin: 0; color: #0f172a; font-size: 10px; font-weight: 950; line-height: 1.1;">${s.name}</p>
+                              <p style="margin: 1px 0 0; color: #64748b; font-size: 7.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">${s.designation}</p>
+                            </div>
+                            
+                            ${s.signature ? `
+                              <div style="height: 30px; display: flex; align-items: center; justify-content: center; margin: 1px 0;">
+                                <img src="${s.signature}" style="max-height: 28px; max-width: 100%; object-fit: contain; filter: grayscale(1) contrast(1.1) brightness(0.9);" />
+                              </div>
+                            ` : `
+                              <div style="height: 30px; display: flex; align-items: center; justify-content: center; border: 1px dashed rgba(15,23,42,0.06); border-radius: 6px; margin: 1px 0; width: 100%;">
+                                <p style="margin: 0; color: #94a3b8; font-size: 6.5px; font-weight: 800; text-transform: uppercase;">Awaiting</p>
+                              </div>
+                            `}
+                            
+                            ${s.comments ? `
+                              <p style="margin: 0; color: #64748b; font-size: 7px; font-weight: 600; font-style: italic; line-height: 1.1; opacity: 0.8;">"${s.comments}"</p>
+                            ` : ''}
+
+                            <div style="margin-top: auto; padding-top: 4px; border-top: 1px solid rgba(0,0,0,0.04); display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                              <span style="font-size: 5.5px; color: #cbd5e1; font-weight: 800; letter-spacing: 0.5px;">UNIPORT AUTH</span>
+                              <span style="font-size: 6px; color: #94a3b8; font-weight: 800;">${s.date ? new Date(s.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '-- --'}</span>
+                            </div>
+                          </div>
+                        `).join('')}
                       </div>
                     </div>
-                  `;
-                }).join('')}
+                  `).join('');
+                })()}
               </div>
             </div>
 
             <!-- DOCUMENT FOOTER -->
             <div style="margin-top: 50px; padding-top: 25px; border-top: 2.5px solid #0f172a; display: flex; justify-content: space-between; align-items: flex-end;">
               <div style="max-width: 450px;">
-                <p style="margin: 0; color: #0f172a; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px;">${request.approval_templates?.requester_role_label || 'Initiated By'}: <span style="color: #2563eb;">${(request.requester_name || request.profiles?.full_name || '').toUpperCase()}</span></p>
-                <p style="margin: 6px 0 0; color: #94a3b8; font-size: 8.5px; font-weight: 600; line-height: 1.5;">This institutional certificate is a secure electronic record generated by the UniPort Governance System. It is digitally authenticated and holds full validity without a physical signature under AIKTC Cluster regulations.</p>
+                <p style="margin: 0; color: #94a3b8; font-size: 8.5px; font-weight: 600; line-height: 1.5;">This institutional certificate is a secure electronic record generated by the UniPort Governance System. It is digitally authenticated and holds full validity without a physical signature under AIKTC Cluster regulations.</p>
               </div>
               <div style="text-align: right;">
                 <p style="margin: 0; color: #1e293b; font-size: 10px; font-weight: 900; letter-spacing: 0.5px;">Auth Date: ${new Date().toLocaleString('en-IN')}</p>
@@ -260,13 +316,18 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
           if (img.complete) return Promise.resolve();
           return new Promise(resolve => {
             img.onload = resolve;
-            img.onerror = resolve;
+            img.onerror = () => {
+              img.style.display = 'none'; // Prevent 0x0 dimension render crash
+              resolve(null);
+            };
           });
         })
       );
 
+      const SCALE_FACTOR = 2.5;
+
       const canvas = await html2canvas(container, {
-        scale: 2.5,
+        scale: SCALE_FACTOR,
         useCORS: true,
         backgroundColor: null, // Critical: keeps content transparent for letterhead
         width: 793.7, // 595.28pt in px (accurate A4 width)
@@ -289,13 +350,23 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
       const safeArea = pdfHeight - headerSpace - footerSpace;
 
       // --- SMART SLICE LOGIC ---
-      // 1. Find all potential break points (bottom of text blocks)
+      // 1. Find all potential break points and bounds of elements that shouldn't be cut
       const pxPerPt = canvas.width / pdfWidth;
       const elements = container.querySelectorAll('.pdf-item');
       const containerTop = container.getBoundingClientRect().top;
-      const elementBottoms = Array.from(elements)
-        .map(el => (el.getBoundingClientRect().bottom - containerTop) * pxPerPt)
-        .sort((a, b) => a - b);
+      
+      const elementRects = Array.from(elements)
+        .map(el => {
+          const rect = el.getBoundingClientRect();
+          return {
+            // CRITICAL: rect.top is relative to viewport. 
+            // rect.top - containerTop gets the CSS offset.
+            // MUST multiply by SCALE_FACTOR (not pxPerPt) to map CSS to Canvas pixels
+            top: (rect.top - containerTop) * SCALE_FACTOR,
+            bottom: (rect.bottom - containerTop) * SCALE_FACTOR
+          };
+        })
+        .sort((a, b) => a.top - b.top);
 
       const headerSpacePx = headerSpace * pxPerPt;
       const footerSpacePx = footerSpace * pxPerPt;
@@ -322,17 +393,30 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
         const availableHeightPx = (pageNum === 0) ? (pdfHeightPx - footerSpacePx) : safeAreaPx;
         let sliceHeightPx = Math.min(canvas.height - currentYPx, availableHeightPx);
 
-        // Adjust slice height to avoid cutting text
+        // Adjust slice height to avoid cutting elements
         if (currentYPx + sliceHeightPx < canvas.height) {
            const idealBottom = currentYPx + sliceHeightPx;
-           // Find the best element bottom that fits in this page
-           // We look for a bottom within the last 80px of the available space
-           const bestBottom = elementBottoms
-             .filter(b => b <= idealBottom && b > idealBottom - 80)
-             .pop();
            
-           if (bestBottom) {
-             sliceHeightPx = bestBottom - currentYPx;
+           // Check if the cut intersects an atomic block
+           const intersectedElement = elementRects.find(rect => rect.top < idealBottom && rect.bottom > idealBottom);
+           
+           if (intersectedElement) {
+             // Cut immediately before the element so it pushes fully to next page
+             const newSliceHeightPx = intersectedElement.top - currentYPx - 15; // clean 15px margin
+             // Only shift if the shift is positive (prevents infinite loop if element is taller than available space)
+             if (newSliceHeightPx > 0) {
+               sliceHeightPx = newSliceHeightPx;
+             }
+           } else {
+             // If not intersecting, optionally snap to a nearby bottom for cleaner margins
+             const bestBottom = elementRects
+               .map(rect => rect.bottom)
+               .filter(b => b <= idealBottom && b > idealBottom - 100)
+               .pop();
+             
+             if (bestBottom) {
+               sliceHeightPx = bestBottom - currentYPx;
+             }
            }
         }
 

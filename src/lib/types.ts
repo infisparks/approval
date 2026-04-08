@@ -40,6 +40,7 @@ export interface UserProfile {
   institutes?: Institute;
   institute_types?: InstituteType;
   person_types?: PersonType;
+  contact_number?: string;
 }
 
 export interface PersonType {
@@ -112,4 +113,33 @@ export interface ApprovalRequest {
   amount?: number;
   bifurcation?: any;
   budget_provisions?: boolean;
+  reference_id?: string;
+}
+
+export interface AcademicYear {
+  id: string;
+  name: string;
+}
+
+export interface StudyYear {
+  id: string;
+  name: string;
+  rank: number;
+}
+
+export interface FeeCollection {
+  id: string;
+  institute_id: string;
+  institute_type_id: string;
+  department_id: string;
+  academic_year_id: string;
+  study_year_id: string;
+  total_students: number;
+  amount_per_student: number;
+  created_at: string;
+  institutes?: Institute;
+  institute_types?: InstituteType;
+  departments?: Department;
+  academic_years?: AcademicYear;
+  study_years?: StudyYear;
 }
