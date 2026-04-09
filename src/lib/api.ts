@@ -599,6 +599,15 @@ export async function updateProfileName(profileId: string, fullName: string): Pr
   if (error) throw error;
 }
 
+export async function updateProfileNumber(profileId: string, number: string | null): Promise<void> {
+  const cleanedNumber = number ? number.replace(/\D/g, '') : null;
+  const { error } = await supabase
+    .from('profiles')
+    .update({ number: cleanedNumber })
+    .eq('id', profileId);
+  if (error) throw error;
+}
+
 export async function getApproversByDesignation(designationId: string, context: string, contextId?: string): Promise<UserProfile[]> {
   let query = supabase.from('profiles').select('*, designations(*)').eq('designation_id', designationId);
   

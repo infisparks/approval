@@ -5,10 +5,10 @@ import { useAuth } from '@/lib/auth-context';
 import AppShell from '@/components/AppShell';
 import { 
   getAllProfilesAdmin, getDesignations, getPersonTypes, 
-  createDesignation, createPersonType, updateProfilePersonType, updateProfileName, updateProfileLockStatus
+  createDesignation, createPersonType, updateProfilePersonType, updateProfileName, updateProfileLockStatus, updateProfileNumber
 } from '@/lib/api';
 import { UserProfile, Designation, PersonType } from '@/lib/types';
-import { ShieldCheck, User, Building, Users, Search, Edit2, Check, X, Info, Plus, Lock, Unlock } from 'lucide-react';
+import { ShieldCheck, User, Building, Users, Search, Edit2, Check, X, Info, Plus, Lock, Unlock, Phone } from 'lucide-react';
 
 function ProfilesTab() {
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
@@ -18,6 +18,7 @@ function ProfilesTab() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [tempType, setTempType] = useState<string | null>(null);
   const [tempName, setTempName] = useState<string>('');
+  const [tempNumber, setTempNumber] = useState<string>('');
   const [updating, setUpdating] = useState<string | null>(null);
 
   const loadData = async () => {
@@ -41,7 +42,8 @@ function ProfilesTab() {
     try {
       await Promise.all([
         updateProfilePersonType(profileId, tempType || null),
-        updateProfileName(profileId, tempName)
+        updateProfileName(profileId, tempName),
+        updateProfileNumber(profileId, tempNumber || null)
       ]);
       await loadData();
       setEditingId(null);
@@ -132,17 +134,35 @@ function ProfilesTab() {
                       </div>
                       <div>
                         {editingId === p.id ? (
-                          <input 
-                            className="field-input" 
-                            style={{ marginBottom: 4, height: 32, fontSize: 13, padding: '0 8px', borderRadius: 6, width: '100%', fontWeight: 700 }}
-                            value={tempName}
-                            onChange={e => setTempName(e.target.value)}
-                            disabled={!!updating}
-                          />
+                          <>
+                            <input 
+                              className="field-input" 
+                              style={{ marginBottom: 4, height: 32, fontSize: 13, padding: '0 8px', borderRadius: 6, width: '100%', fontWeight: 700 }}
+                              value={tempName}
+                              onChange={e => setTempName(e.target.value)}
+                              disabled={!!updating}
+                              placeholder="Full Name"
+                            />
+                            <input 
+                              className="field-input" 
+                              style={{ marginBottom: 4, height: 32, fontSize: 13, padding: '0 8px', borderRadius: 6, width: '100%', fontWeight: 700 }}
+                              value={tempNumber}
+                              onChange={e => setTempNumber(e.target.value)}
+                              disabled={!!updating}
+                              placeholder="Phone Number"
+                            />
+                          </>
                         ) : (
-                          <div style={{ fontWeight: 800, color: 'var(--midnight)', fontSize: 14 }}>{p.full_name}</div>
+                          <>
+                            <div style={{ fontWeight: 800, color: 'var(--midnight)', fontSize: 14 }}>{p.full_name}</div>
+                            <div style={{ fontSize: 12, color: 'var(--slate)', fontWeight: 500 }}>{p.email}</div>
+                            {p.number && (
+                              <div style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                                <Phone size={10} /> {p.number}
+                              </div>
+                            )}
+                          </>
                         )}
-                        <div style={{ fontSize: 12, color: 'var(--slate)', fontWeight: 500 }}>{p.email}</div>
                       </div>
                     </div>
                   </td>
@@ -212,6 +232,7 @@ function ProfilesTab() {
                             setEditingId(p.id);
                             setTempType(p.person_type_id || null);
                             setTempName(p.full_name || '');
+                            setTempNumber(p.number || '');
                           }}
                         >
                           <Edit2 size={14} />
