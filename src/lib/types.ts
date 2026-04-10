@@ -116,6 +116,7 @@ export interface ApprovalRequest {
   bifurcation?: any;
   budget_provisions?: boolean;
   reference_id?: string;
+  request_sequence_id?: number;
 }
 
 export interface AcademicYear {
