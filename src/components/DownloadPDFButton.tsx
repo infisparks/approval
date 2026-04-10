@@ -81,6 +81,35 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
         return `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 9px; font-weight: 950; background: ${c.bg}; color: ${c.text}; border: 1px solid ${c.border}; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.5px;">${s}</span>`;
       };
 
+      // Reference ID Generator (Javascript version of the Postgres function)
+      const getReferenceId = () => {
+        if (request.reference_id) return request.reference_id;
+        
+        try {
+          const inst = request.profiles?.institutes?.name || 'AIKTC';
+          const school = request.profiles?.institute_types?.short_form || 'NA';
+          const dept = request.profiles?.departments?.short_form || 'NA';
+          const seq = request.request_sequence_id || request.id.slice(-4).toUpperCase();
+          
+          const date = new Date(request.created_at);
+          const year = date.getFullYear();
+          const month = date.getMonth() + 1; // JS months are 0-indexed
+          
+          let acadYear = '';
+          if (month >= 6) {
+            acadYear = `${year}-${(year + 1).toString().slice(-2)}`;
+          } else {
+            acadYear = `${year - 1}-${year.toString().slice(-2)}`;
+          }
+          
+          return `${inst}/${school}/${dept}/${acadYear}/${seq}`;
+        } catch (e) {
+          return verificationId;
+        }
+      };
+
+      const referenceId = getReferenceId();
+
       container.innerHTML = `
         <div style="width: 595.28pt; background: transparent; position: relative; margin: 0; padding: 0; overflow: visible; box-sizing: border-box;">
           <!-- CONTENT OVERLAY LAYER (No letterhead here to avoid double-rendering) -->
@@ -89,7 +118,7 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
             <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 30px; border-bottom: 1.5px solid #0f172a; padding-bottom: 15px;">
               <div style="max-width: 65%;">
                 <div style="margin-bottom: 15px;">
-                  <p style="margin: 0; color: #2563eb; font-size: 10px; font-weight: 950; letter-spacing: 1.5px; text-transform: uppercase;">Reference No: ${request.reference_id || verificationId}</p>
+                  <p style="margin: 0; color: #2563eb; font-size: 10px; font-weight: 950; letter-spacing: 1.5px; text-transform: uppercase;">Reference No: ${referenceId}</p>
                 </div>
                 <h1 style="margin: 0; color: #0f172a; font-size: 28px; font-weight: 950; line-height: 1.1; letter-spacing: -1px;">Approval Certificate<br/><span style="color: #000; font-size: 22px; letter-spacing: 0px;">Submitted for Management Approval</span></h1>
                 <div style="margin-top: 20px; display: flex; gap: 35px;">

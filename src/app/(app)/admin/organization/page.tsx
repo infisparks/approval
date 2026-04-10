@@ -1,31 +1,71 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import AppShell from '@/components/AppShell';
 import { 
-  getAllProfilesAdmin, getDesignations, getPersonTypes, 
-  createDesignation, createPersonType, updateProfilePersonType, updateProfileName, updateProfileLockStatus, updateProfileNumber
+  getAllProfilesAdmin, getDesignations, getPersonTypes, getInstitutes, getInstituteTypes, getDepartments,
+  createDesignation, createPersonType, updateProfileAdmin, updateProfileLockStatus
 } from '@/lib/api';
-import { UserProfile, Designation, PersonType } from '@/lib/types';
-import { ShieldCheck, User, Building, Users, Search, Edit2, Check, X, Info, Plus, Lock, Unlock, Phone } from 'lucide-react';
+import { UserProfile, Designation, PersonType, Institute, InstituteType, Department } from '@/lib/types';
+import { ShieldCheck, User, Building, Users, Search, Edit2, Check, X, Info, Plus, Lock, Unlock, Phone, ChevronRight } from 'lucide-react';
 
 function ProfilesTab() {
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [personTypes, setPersonTypes] = useState<PersonType[]>([]);
+  const [institutes, setInstitutes] = useState<Institute[]>([]);
+  const [instituteTypes, setInstituteTypes] = useState<InstituteType[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [designations, setDesignations] = useState<Designation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [tempType, setTempType] = useState<string | null>(null);
   const [tempName, setTempName] = useState<string>('');
   const [tempNumber, setTempNumber] = useState<string>('');
+  const [tempInstitute, setTempInstitute] = useState<string | null>(null);
+  const [tempInstituteType, setTempInstituteType] = useState<string | null>(null);
+  const [tempDept, setTempDept] = useState<string | null>(null);
+  const [tempDesig, setTempDesig] = useState<string | null>(null);
+  const [tempIsAdmin, setTempIsAdmin] = useState<boolean>(false);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [showHierarchy, setShowHierarchy] = useState(false);
+
+  // Search/Filter State
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const [search, setSearch] = useState(searchParams.get('q') || '');
+  const [filterInstitute, setFilterInstitute] = useState(searchParams.get('institute') || '');
+  const [filterType, setFilterType] = useState(searchParams.get('type') || '');
+  const [filterDept, setFilterDept] = useState(searchParams.get('dept') || '');
+  const [filterDesig, setFilterDesig] = useState(searchParams.get('desig') || '');
+
+  const updateUrlParams = (params: Record<string, string | null>) => {
+    const current = new URLSearchParams(searchParams.toString());
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) current.set(key, value);
+      else current.delete(key);
+    });
+    router.replace(`${pathname}?${current.toString()}`);
+  };
 
   const loadData = async () => {
     setLoading(true);
-    const [p, pt] = await Promise.all([getAllProfilesAdmin(), getPersonTypes()]);
+    const [p, pt, inst, instT, dept, desig] = await Promise.all([
+      getAllProfilesAdmin(), 
+      getPersonTypes(),
+      getInstitutes(),
+      getInstituteTypes(),
+      getDepartments(),
+      getDesignations()
+    ]);
     setProfiles(p);
     setPersonTypes(pt);
+    setInstitutes(inst);
+    setInstituteTypes(instT);
+    setDepartments(dept);
+    setDesignations(desig);
     setLoading(false);
   };
 
@@ -40,11 +80,49 @@ function ProfilesTab() {
     }
     setUpdating(profileId);
     try {
-      await Promise.all([
-        updateProfilePersonType(profileId, tempType || null),
-        updateProfileName(profileId, tempName),
-        updateProfileNumber(profileId, tempNumber || null)
-      ]);
+      // Automatic data sanitization and SUPERIOR auto-assignment
+      const desigName = designations.find(d => d.id === tempDesig)?.name?.toLowerCase() || '';
+      let finalDept = tempDept;
+      let finalInstType = tempInstituteType;
+      let finalInst = tempInstitute;
+
+      const globalNames = ['director', 'chairman', 'cfo', 'ceo', 'treasurer', 'vice president', 'president', 'accountant', 'admin'];
+
+      // Rule 1: If it's a Global/Superior role, try to auto-map to "Administration" dept/type/inst if not already set
+      if (globalNames.includes(desigName)) {
+        const adminInst = institutes.find(i => i.name.toLowerCase() === 'administration');
+        const adminType = instituteTypes.find(it => it.name.toLowerCase() === 'administration' && (it.institute_id === finalInst || it.institute_id === adminInst?.id));
+        const adminDept = departments.find(d => d.name.toLowerCase() === 'administration' && (d.institute_type_id === finalInstType || d.institute_type_id === adminType?.id));
+
+        if (desigName === 'chairman' || desigName === 'cfo' || desigName === 'ceo' || desigName === 'treasurer' || desigName === 'vice president' || desigName === 'president') {
+           // Institutional Superior: Default to Administration Institute/Type/Dept
+           if (!finalInst && adminInst) finalInst = adminInst.id;
+           if (!finalInstType && adminType) finalInstType = adminType.id;
+           if (!finalDept && adminDept) finalDept = adminDept.id;
+        } else if (desigName === 'director') {
+           // Director: Default to Administration Type/Dept within the selected Institute
+           if (!finalInstType && adminType) finalInstType = adminType.id;
+           if (!finalDept && adminDept) finalDept = adminDept.id;
+        } else if (['accountant', 'admin'].includes(desigName)) {
+           // Staff Admin: Default to Administration Dept within the selected Type
+           if (!finalDept && adminDept) finalDept = adminDept.id;
+        }
+      } else if (desigName === 'dean') {
+        // Dean: Default to Administration Dept within the selected Type
+        const adminDept = departments.find(d => d.name.toLowerCase() === 'administration' && d.institute_type_id === finalInstType);
+        if (!finalDept && adminDept) finalDept = adminDept.id;
+      }
+
+      await updateProfileAdmin(profileId, {
+        full_name: tempName,
+        number: tempNumber || null,
+        person_type_id: tempType || null,
+        institute_id: finalInst || null,
+        institute_type_id: finalInstType || null,
+        department_id: finalDept || null,
+        designation_id: tempDesig || null,
+        is_admin: tempIsAdmin
+      });
       await loadData();
       setEditingId(null);
     } catch (err: any) {
@@ -66,10 +144,18 @@ function ProfilesTab() {
     }
   };
 
-  const filtered = profiles.filter(p => 
-    p.full_name?.toLowerCase().includes(search.toLowerCase()) || 
-    p.email?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = profiles.filter(p => {
+    const matchesSearch = !search || 
+      p.full_name?.toLowerCase().includes(search.toLowerCase()) || 
+      p.email?.toLowerCase().includes(search.toLowerCase());
+    
+    const matchesInstitute = !filterInstitute || p.institute_id === filterInstitute;
+    const matchesType = !filterType || p.institute_type_id === filterType;
+    const matchesDept = !filterDept || p.department_id === filterDept;
+    const matchesDesig = !filterDesig || p.designation_id === filterDesig;
+
+    return matchesSearch && matchesInstitute && matchesType && matchesDept && matchesDesig;
+  });
 
   return (
     <div>
@@ -90,9 +176,89 @@ function ProfilesTab() {
             }}
             placeholder="Search within institutional directory..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => {
+              setSearch(e.target.value);
+              updateUrlParams({ q: e.target.value });
+            }}
           />
         </div>
+        
+        {/* Advanced Filters */}
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24, width: '100%' }}>
+          <select 
+            className="field-input" 
+            style={{ width: 'auto', minWidth: 160, marginBottom: 0, height: 44, borderRadius: 12, fontSize: 13 }}
+            value={filterInstitute}
+            onChange={e => {
+              setFilterInstitute(e.target.value);
+              setFilterType('');
+              setFilterDept('');
+              updateUrlParams({ institute: e.target.value, type: null, dept: null });
+            }}
+          >
+            <option value="">All Institutes</option>
+            {institutes.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+          </select>
+
+          <select 
+            className="field-input" 
+            style={{ width: 'auto', minWidth: 160, marginBottom: 0, height: 44, borderRadius: 12, fontSize: 13 }}
+            value={filterType}
+            onChange={e => {
+              setFilterType(e.target.value);
+              setFilterDept('');
+              updateUrlParams({ type: e.target.value, dept: null });
+            }}
+            disabled={!filterInstitute}
+          >
+            <option value="">All Types</option>
+            {instituteTypes.filter(it => it.institute_id === filterInstitute).map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
+          </select>
+
+          <select 
+            className="field-input" 
+            style={{ width: 'auto', minWidth: 160, marginBottom: 0, height: 44, borderRadius: 12, fontSize: 13 }}
+            value={filterDept}
+            onChange={e => {
+              setFilterDept(e.target.value);
+              updateUrlParams({ dept: e.target.value });
+            }}
+            disabled={!filterType}
+          >
+            <option value="">All Departments</option>
+            {departments.filter(d => d.institute_type_id === filterType).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+
+          <select 
+            className="field-input" 
+            style={{ width: 'auto', minWidth: 160, marginBottom: 0, height: 44, borderRadius: 12, fontSize: 13 }}
+            value={filterDesig}
+            onChange={e => {
+              setFilterDesig(e.target.value);
+              updateUrlParams({ desig: e.target.value });
+            }}
+          >
+            <option value="">All Designations</option>
+            {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+
+          <button 
+            className="btn btn-icon" 
+            style={{ height: 44, width: 44, borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--border)' }}
+            onClick={() => {
+              setSearch('');
+              setFilterInstitute('');
+              setFilterType('');
+              setFilterDept('');
+              setFilterDesig('');
+              updateUrlParams({ q: null, institute: null, type: null, dept: null, desig: null });
+            }}
+            title="Clear All Filters"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
         <div style={{ 
           display: 'flex', alignItems: 'center', gap: 10, padding: '12px 20px', 
           background: 'linear-gradient(135deg, var(--midnight), var(--navy-light))', 
@@ -109,6 +275,28 @@ function ProfilesTab() {
         </div>
       </div>
 
+      <div style={{ 
+        marginBottom: 24, 
+        padding: '16px 20px', 
+        background: '#fff', 
+        borderRadius: 16, 
+        border: '1px solid var(--border)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+      }}>
+        <label className="checkbox-container" style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', margin: 0 }}>
+          <input 
+            type="checkbox" 
+            checked={showHierarchy} 
+            onChange={e => setShowHierarchy(e.target.checked)}
+            style={{ width: 20, height: 20, cursor: 'pointer', accentColor: 'var(--midnight)' }}
+          />
+          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--midnight)' }}>Show Full Institutional Hierarchy Details</span>
+        </label>
+      </div>
+
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><div className="loading-spinner" /></div>
       ) : (
@@ -117,9 +305,15 @@ function ProfilesTab() {
             <thead>
               <tr>
                 <th>Profile Info</th>
-                <th>Designation / Dept.</th>
-                <th>Institution (Inst. Type)</th>
-                <th>Staff Category (Person Type)</th>
+                {showHierarchy ? (
+                  <th>Full Institutional Path (Inst. &gt; Type &gt; Dept. &gt; Desig. &gt; Cat.)</th>
+                ) : (
+                  <>
+                    <th>Designation / Dept.</th>
+                    <th>Institution (Inst. Type)</th>
+                    <th>Staff Category (Person Type)</th>
+                  </>
+                )}
                 <th style={{ textAlign: 'right' }}>Action</th>
               </tr>
             </thead>
@@ -147,7 +341,7 @@ function ProfilesTab() {
                               className="field-input" 
                               style={{ marginBottom: 4, height: 32, fontSize: 13, padding: '0 8px', borderRadius: 6, width: '100%', fontWeight: 700 }}
                               value={tempNumber}
-                              onChange={e => setTempNumber(e.target.value)}
+                              onChange={e => setTempNumber(String(e.target.value))}
                               disabled={!!updating}
                               placeholder="Phone Number"
                             />
@@ -166,38 +360,161 @@ function ProfilesTab() {
                       </div>
                     </div>
                   </td>
-                  <td>
-                    {p.designations ? (
-                      <div className="badge-modern badge-blue" style={{ marginBottom: 4 }}>{p.designations.name}</div>
-                    ) : <span className="text-muted" style={{ display: 'block', marginBottom: 4 }}>No Designation</span>}
-                    <div style={{ fontSize: 11, color: 'var(--slate)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Building size={10} /> {p.departments?.name || 'No Department'}
-                    </div>
-                  </td>
-                  <td>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--midnight)' }}>{p.institutes?.name || 'N/A'}</div>
-                    <div style={{ fontSize: 11, color: 'var(--slate)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Building size={10} /> {p.institute_types?.name || 'N/A'}
-                    </div>
-                  </td>
-                  <td>
-                    {editingId === p.id ? (
-                      <select 
-                        className="field-input" 
-                        style={{ marginBottom: 0, height: 36, fontSize: 13, padding: '0 10px', borderRadius: 8, border: '2px solid var(--accent)' }}
-                        value={tempType || ''}
-                        onChange={e => setTempType(e.target.value)}
-                        disabled={!!updating}
-                      >
-                        <option value="">Select Category</option>
-                        {personTypes.map(pt => <option key={pt.id} value={pt.id}>{pt.name}</option>)}
-                      </select>
-                    ) : (
-                      p.person_types ? (
-                        <div className="badge-modern badge-green">{p.person_types.name}</div>
-                      ) : <span className="text-muted">Uncategorized</span>
-                    )}
-                  </td>
+
+                  {showHierarchy || editingId === p.id ? (
+                    <td>
+                      {editingId === p.id ? (
+                        <div style={{ display: 'grid', gap: 12, padding: 16, background: 'var(--surface)', borderRadius: 16, border: '2px solid var(--accent)' }}>
+                          {/* Profile Hierarchy Configuration */}
+                          <div style={{ padding: '8px 12px', background: 'rgba(59, 130, 246, 0.05)', borderRadius: 10, border: '1px solid rgba(59, 130, 246, 0.1)', marginBottom: 4 }}>
+                            <div style={{ fontSize: 10, fontWeight: 900, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: 1 }}>Superior Assignment Rules</div>
+                            <div style={{ fontSize: 11, color: 'var(--slate)', marginTop: 2 }}>
+                              Selecting <b>'Administration'</b> in Department/Type allows this user to manage <b>ALL</b> sub-entities in that scope.
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                            <div className="field-group" style={{ marginBottom: 0 }}>
+                              <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', textTransform: 'uppercase' }}>Institute</label>
+                              <select 
+                                className="field-input" 
+                                style={{ marginBottom: 0, height: 38, fontSize: 13 }} 
+                                value={tempInstitute || ''} 
+                                onChange={e => {
+                                  setTempInstitute(e.target.value);
+                                  setTempInstituteType(null);
+                                  setTempDept(null);
+                                }}
+                              >
+                                <option value="">Select Institute</option>
+                                {institutes.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                              </select>
+                            </div>
+
+                            <div className="field-group" style={{ marginBottom: 0 }}>
+                              <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', textTransform: 'uppercase' }}>Inst. Type</label>
+                              <select 
+                                className="field-input" 
+                                style={{ marginBottom: 0, height: 38, fontSize: 13 }} 
+                                value={tempInstituteType || ''} 
+                                onChange={e => {
+                                  setTempInstituteType(e.target.value);
+                                  setTempDept(null);
+                                }}
+                                disabled={!tempInstitute}
+                              >
+                                <option value="">Select Type</option>
+                                {instituteTypes
+                                  .filter(it => it.institute_id === tempInstitute)
+                                  .map(it => <option key={it.id} value={it.id}>{it.name}</option>)
+                                }
+                              </select>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                            <div className="field-group" style={{ marginBottom: 0 }}>
+                              <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', textTransform: 'uppercase' }}>Department</label>
+                              <select 
+                                className="field-input" 
+                                style={{ marginBottom: 0, height: 38, fontSize: 13 }} 
+                                value={tempDept || ''} 
+                                onChange={e => setTempDept(e.target.value)}
+                                disabled={!tempInstituteType}
+                              >
+                                <option value="">Select Department</option>
+                                {departments
+                                  .filter(d => d.institute_type_id === tempInstituteType)
+                                  .map(d => <option key={d.id} value={d.id}>{d.name}</option>)
+                                }
+                              </select>
+                            </div>
+                            
+                            <div className="field-group" style={{ marginBottom: 0 }}>
+                              <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', textTransform: 'uppercase' }}>Designation</label>
+                              <select className="field-input" style={{ marginBottom: 0, height: 38, fontSize: 13 }} value={tempDesig || ''} onChange={e => setTempDesig(e.target.value)}>
+                                <option value="">Select Designation</option>
+                                {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                              </select>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                            <div>
+                              <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', textTransform: 'uppercase' }}>Staff Category</label>
+                              <select className="field-input" style={{ marginBottom: 0, height: 38, fontSize: 13 }} value={tempType || ''} onChange={e => setTempType(e.target.value)}>
+                                <option value="">Select Category</option>
+                                {personTypes.map(pt => <option key={pt.id} value={pt.id}>{pt.name}</option>)}
+                              </select>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(0,0,0,0.03)', borderRadius: 10, padding: '0 12px' }}>
+                               <input type="checkbox" checked={tempIsAdmin} onChange={e => setTempIsAdmin(e.target.checked)} />
+                               <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--midnight)' }}>Admin Portal Access</span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ 
+                          fontSize: 12, 
+                          fontWeight: 700, 
+                          color: 'var(--midnight)',
+                          padding: '10px 14px',
+                          background: 'var(--surface)',
+                          borderRadius: 10,
+                          border: '1px solid var(--border)',
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          alignItems: 'center',
+                          gap: 8
+                        }}>
+                          <span style={{ color: 'var(--accent)' }}>{p.institutes?.name || 'N/A'}</span>
+                          <span style={{ opacity: 0.3 }}>&gt;</span>
+                          <span style={{ color: 'var(--midnight)' }}>{p.institute_types?.name || 'N/A'}</span>
+                          <span style={{ opacity: 0.3 }}>&gt;</span>
+                          <span style={{ color: 'var(--navy-light)' }}>{p.departments?.name || 'N/A'}</span>
+                          <span style={{ opacity: 0.3 }}>&gt;</span>
+                          <span style={{ color: 'var(--slate)' }}>{p.designations?.name || 'N/A'}</span>
+                          <span style={{ opacity: 0.3 }}>&gt;</span>
+                          <span style={{ color: 'var(--emerald)', fontWeight: 800 }}>{p.person_types?.name || 'N/A'}</span>
+                        </div>
+                      )}
+                    </td>
+                  ) : (
+                    <>
+                      <td>
+                        {p.designations ? (
+                          <div className="badge-modern badge-blue" style={{ marginBottom: 4 }}>{p.designations.name}</div>
+                        ) : <span className="text-muted" style={{ display: 'block', marginBottom: 4 }}>No Designation</span>}
+                        <div style={{ fontSize: 11, color: 'var(--slate)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Building size={10} /> {p.departments?.name || 'No Department'}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--midnight)' }}>{p.institutes?.name || 'N/A'}</div>
+                        <div style={{ fontSize: 11, color: 'var(--slate)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Building size={10} /> {p.institute_types?.name || 'N/A'}
+                        </div>
+                      </td>
+                      <td>
+                        {editingId === p.id ? (
+                          <select 
+                            className="field-input" 
+                            style={{ marginBottom: 0, height: 36, fontSize: 13, padding: '0 10px', borderRadius: 8, border: '2px solid var(--accent)' }}
+                            value={tempType || ''}
+                            onChange={e => setTempType(e.target.value)}
+                            disabled={!!updating}
+                          >
+                            <option value="">Select Category</option>
+                            {personTypes.map(pt => <option key={pt.id} value={pt.id}>{pt.name}</option>)}
+                          </select>
+                        ) : (
+                          p.person_types ? (
+                            <div className="badge-modern badge-green">{p.person_types.name}</div>
+                          ) : <span className="text-muted">Uncategorized</span>
+                        )}
+                      </td>
+                    </>
+                  )}
                   <td style={{ textAlign: 'right' }}>
                     {editingId === p.id ? (
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
@@ -232,7 +549,12 @@ function ProfilesTab() {
                             setEditingId(p.id);
                             setTempType(p.person_type_id || null);
                             setTempName(p.full_name || '');
-                            setTempNumber(p.number || '');
+                            setTempNumber(String(p.number || ''));
+                            setTempInstitute(p.institute_id || null);
+                            setTempInstituteType(p.institute_type_id || null);
+                            setTempDept(p.department_id || null);
+                            setTempDesig(p.designation_id || null);
+                            setTempIsAdmin(!!p.is_admin);
                           }}
                         >
                           <Edit2 size={14} />
@@ -244,7 +566,7 @@ function ProfilesTab() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ textAlign: 'center', padding: '50px', background: 'var(--surface)' }}>
+                  <td colSpan={showHierarchy ? 3 : 5} style={{ textAlign: 'center', padding: '50px', background: 'var(--surface)' }}>
                     <div style={{ opacity: 0.5, marginBottom: 12 }}><Search size={40} /></div>
                     <div style={{ fontWeight: 700, color: 'var(--slate)' }}>No profiles matched your search</div>
                   </td>

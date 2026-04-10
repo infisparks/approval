@@ -557,8 +557,11 @@ function MyRequestCard({ req, onClick }: { req: ApprovalRequest; onClick: () => 
     setLoadingStep(step.id);
     setHoverStep(step.id);
     try {
-      const contextId = step.context === 'departmental' ? req.profiles?.department_id : step.context === 'institute' ? req.profiles?.institute_type_id : undefined;
-      const users = await getApproversByDesignation(step.designation_id, step.context, contextId);
+      const users = await getApproversByDesignation(step.designation_id, step.context, {
+        departmentId: req.profiles?.department_id,
+        instituteTypeId: req.profiles?.institute_type_id,
+        instituteId: req.profiles?.institute_id
+      });
       setApproverNames(prev => ({ ...prev, [step.id]: users.map(u => u.full_name) }));
     } catch (err) {
       console.error(err);

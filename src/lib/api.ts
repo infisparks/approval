@@ -211,13 +211,47 @@ export async function getPendingApprovals(): Promise<ApprovalRequest[]> {
 
   const designation = profile.designations;
   const department = profile.departments;
+  const instituteId = profile.institute_id;
+
   return (data || []).filter(req => {
     const steps = req.approval_templates?.template_steps?.sort((a: { step_order: number }, b: { step_order: number }) => a.step_order - b.step_order) || [];
     const currentStep = steps.find((s: { step_order: number }) => s.step_order === req.current_step_order);
     if (!currentStep) return false;
+
+    // Check if my designation matches the required step designation
     if (currentStep.designation_id !== designation?.id) return false;
-    if (currentStep.context === 'departmental' && req.profiles?.department_id !== department?.id) return false;
-    if (currentStep.context === 'institute' && req.profiles?.institute_type_id !== profile.institute_type_id) return false;
+
+    // Hierarchy scoping logic (STRICT with Top-Down Administration Superiority)
+    const reqProfile = req.profiles;
+    if (!reqProfile) return false;
+
+    // Identify requester's location
+    const reqInstId = reqProfile.institute_id;
+    const reqTypeId = reqProfile.institute_type_id;
+    const reqDeptId = reqProfile.department_id;
+
+    // Identify my (approver's) "Superiority" levels
+    const isSystemAdmin = profile.institutes?.name?.toLowerCase()?.trim() === 'administration';
+    const isInstAdmin = profile.institute_types?.name?.toLowerCase()?.trim() === 'administration';
+    const isTypeAdmin = profile.departments?.name?.toLowerCase()?.trim() === 'administration';
+
+    // 1. Mandatory Institute Match (unless I am a System-wide administrator)
+    if (reqInstId !== profile.institute_id && !isSystemAdmin) return false;
+
+    // 2. Context-based matching with Superior overrides
+    if (currentStep.context === 'departmental') {
+      // Must match department OR I am a Type/Inst/System admin
+      const matchDept = reqDeptId === profile.department_id || isTypeAdmin || isInstAdmin || isSystemAdmin;
+      // Must match type OR I am an Inst/System admin
+      const matchType = reqTypeId === profile.institute_type_id || isInstAdmin || isSystemAdmin;
+      if (!matchDept || !matchType) return false;
+    } else if (currentStep.context === 'institute') {
+      // Must match type OR I am an Inst/System admin
+      const matchType = reqTypeId === profile.institute_type_id || isInstAdmin || isSystemAdmin;
+      if (!matchType) return false;
+    } else if (currentStep.context === 'global') {
+      // Already handled by the institute check above
+    }
     
     const alreadyActed = req.request_approvals?.some((a: { approver_id: string; step_order: number; status: string }) =>
       a.approver_id === user.id && a.step_order === req.current_step_order && a.status !== 'reverted'
@@ -311,7 +345,7 @@ export async function createRequest(
   // 1. Get requester profile with rank
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, email, department_id, institute_type_id, designations(rank)')
+    .select('full_name, email, department_id, institute_id, institute_type_id, designations(rank)')
     .eq('id', user.id)
     .single();
   
@@ -374,7 +408,11 @@ export async function createRequest(
       const approvers = await getApproversByDesignation(
         nextStep.designation_id, 
         nextStep.context, 
-        nextStep.context === 'departmental' ? (profile as any).department_id : (profile as any).institute_type_id
+        {
+          departmentId: (profile as any).department_id,
+          instituteTypeId: (profile as any).institute_type_id,
+          instituteId: (profile as any).institute_id
+        }
       );
       
       console.log(`[Notification Debug] Found ${approvers.length} potential approvers for step:`, nextStep);
@@ -423,7 +461,11 @@ export async function approveRequest(requestId: string, stepOrder: number, comme
     const approvers = await getApproversByDesignation(
       nextStep.designation_id,
       nextStep.context,
-      nextStep.context === 'departmental' ? req.profiles?.department_id : req.profiles?.institute_type_id
+      {
+        departmentId: req.profiles?.department_id,
+        instituteTypeId: req.profiles?.institute_type_id,
+        instituteId: req.profiles?.institute_id
+      }
     );
 
     console.log(`[Approval Flow] Found ${approvers.length} next approvers for requestId: ${requestId}`);
@@ -600,7 +642,7 @@ export async function updateProfileName(profileId: string, fullName: string): Pr
 }
 
 export async function updateProfileNumber(profileId: string, number: string | null): Promise<void> {
-  const cleanedNumber = number ? number.replace(/\D/g, '') : null;
+  const cleanedNumber = number ? String(number).replace(/\D/g, '') : null;
   const { error } = await supabase
     .from('profiles')
     .update({ number: cleanedNumber })
@@ -608,18 +650,69 @@ export async function updateProfileNumber(profileId: string, number: string | nu
   if (error) throw error;
 }
 
-export async function getApproversByDesignation(designationId: string, context: string, contextId?: string): Promise<UserProfile[]> {
-  let query = supabase.from('profiles').select('*, designations(*)').eq('designation_id', designationId);
-  
-  if (context === 'departmental' && contextId) {
-    query = query.eq('department_id', contextId);
-  } else if (context === 'institute' && contextId) {
-    query = query.eq('institute_type_id', contextId);
+export async function updateProfileAdmin(
+  profileId: string, 
+  updates: {
+    full_name?: string;
+    number?: string | null;
+    person_type_id?: string | null;
+    designation_id?: string | null;
+    department_id?: string | null;
+    institute_id?: string | null;
+    institute_type_id?: string | null;
+  }
+): Promise<void> {
+  const finalUpdates = { ...updates };
+  if (finalUpdates.number !== undefined) {
+    finalUpdates.number = finalUpdates.number ? String(finalUpdates.number).replace(/\D/g, '') : null;
   }
   
-  const { data, error } = await query;
+  const { error } = await supabase
+    .from('profiles')
+    .update(finalUpdates)
+    .eq('id', profileId);
   if (error) throw error;
-  return data || [];
+}
+
+export async function getApproversByDesignation(
+  designationId: string, 
+  context: string, 
+  ids: { departmentId?: string; instituteTypeId?: string; instituteId?: string }
+): Promise<UserProfile[]> {
+  // 1. Basic query by designation
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*, designations(*), departments(name), institute_types(name), institutes(name)')
+    .eq('designation_id', designationId);
+  
+  if (error) throw error;
+  if (!data) return [];
+
+  // 2. Filter based on Top-Down "Administration" Superiority
+  return data.filter(p => {
+    const isSystemAdmin = p.institutes?.name?.toLowerCase()?.trim() === 'administration';
+    const isInstAdmin = p.institute_types?.name?.toLowerCase()?.trim() === 'administration';
+    const isTypeAdmin = p.departments?.name?.toLowerCase()?.trim() === 'administration';
+
+    // 1. Mandatory Institute Match (unless they are a System-wide administrator)
+    if (p.institute_id !== ids.instituteId && !isSystemAdmin) return false;
+
+    // 2. Context-based matching with Superior overrides
+    if (context === 'departmental') {
+      // Approver matches if they are in same dept OR they are a Type/Inst/System admin
+      const matchDept = p.department_id === ids.departmentId || isTypeAdmin || isInstAdmin || isSystemAdmin;
+      // Also must match type OR they are an Inst/System admin
+      const matchType = p.institute_type_id === ids.instituteTypeId || isInstAdmin || isSystemAdmin;
+      if (!matchDept || !matchType) return false;
+    } else if (context === 'institute') {
+      // Approver matches if they are in same type OR they are an Inst/System admin
+      const matchType = p.institute_type_id === ids.instituteTypeId || isInstAdmin || isSystemAdmin;
+      if (!matchType) return false;
+    }
+    
+    // Default: global context matches at the institute level (already checked)
+    return true;
+  });
 }
 
 export async function createDepartment(name: string, instituteTypeId: string): Promise<void> {
