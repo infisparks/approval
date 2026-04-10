@@ -2,6 +2,7 @@ export interface Department {
   id: string;
   name: string;
   institute_type_id: string;
+  short_form?: string;
 }
 
 export interface Designation {
@@ -20,6 +21,7 @@ export interface InstituteType {
   name: string;
   institute_id: string;
   letterhead_url?: string;
+  short_form?: string;
 }
 
 export interface UserProfile {
