@@ -765,6 +765,32 @@ export async function addFeeCollection(collection: Omit<FeeCollection, 'id' | 'c
   if (error) throw error;
 }
 
+export async function updateFeeCollection(id: string, collection: Partial<FeeCollection>): Promise<void> {
+  const { error } = await supabase.from('fee_collections').update(collection).eq('id', id);
+  if (error) throw error;
+}
+
+export async function checkFeeCollectionExists(filters: {
+  institute_id: string;
+  institute_type_id: string;
+  department_id: string;
+  academic_year_id: string;
+  study_year_id: string;
+}): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('fee_collections')
+    .select('id')
+    .eq('institute_id', filters.institute_id)
+    .eq('institute_type_id', filters.institute_type_id)
+    .eq('department_id', filters.department_id)
+    .eq('academic_year_id', filters.academic_year_id)
+    .eq('study_year_id', filters.study_year_id)
+    .maybeSingle();
+  
+  if (error) throw error;
+  return data?.id || null;
+}
+
 export async function sendWhatsAppNotification(
   contactNumber: string,
   facultyName: string,

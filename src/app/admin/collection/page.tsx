@@ -8,7 +8,9 @@ import {
   getAcademicYears, 
   getStudyYears, 
   getFeeCollections, 
-  addFeeCollection 
+  addFeeCollection,
+  updateFeeCollection,
+  checkFeeCollectionExists
 } from '@/lib/api';
 import { 
   Institute, 
@@ -32,7 +34,8 @@ import {
   Box,
   ArrowRight,
   Calculator,
-  Briefcase
+  Briefcase,
+  Edit2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AppShell from '@/components/AppShell';
@@ -48,6 +51,7 @@ export default function CollectionManagement() {
   
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<FeeCollection | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Filters & Form State
@@ -111,8 +115,28 @@ export default function CollectionManagement() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      await addFeeCollection(formData);
+      // Check for duplicates
+      const existingId = await checkFeeCollectionExists({
+        institute_id: formData.institute_id,
+        institute_type_id: formData.institute_type_id,
+        department_id: formData.department_id,
+        academic_year_id: formData.academic_year_id,
+        study_year_id: formData.study_year_id
+      });
+
+      if (existingId && (!editingItem || existingId !== editingItem.id)) {
+        alert('An entry for this combination (Academic Year, School, Department, and Study Year) already exists. Please edit the existing entry instead.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (editingItem) {
+        await updateFeeCollection(editingItem.id, formData);
+      } else {
+        await addFeeCollection(formData);
+      }
       setShowAddModal(false);
+      setEditingItem(null);
       setFormData({
         institute_id: '',
         institute_type_id: '',
@@ -124,11 +148,25 @@ export default function CollectionManagement() {
       });
       loadCollections();
     } catch (error) {
-      console.error('Error adding collection:', error);
-      alert('Failed to add entry. Please check all fields.');
+      console.error('Error saving collection:', error);
+      alert('Failed to save entry. Please check all fields.');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleEdit = (item: FeeCollection) => {
+    setEditingItem(item);
+    setFormData({
+      institute_id: item.institute_id,
+      institute_type_id: item.institute_type_id,
+      department_id: item.department_id,
+      academic_year_id: item.academic_year_id,
+      study_year_id: item.study_year_id,
+      total_students: item.total_students,
+      amount_per_student: item.amount_per_student
+    });
+    setShowAddModal(true);
   };
 
   const filteredInstituteTypes = instituteTypes.filter(t => !formData.institute_id || t.institute_id === formData.institute_id);
@@ -157,14 +195,13 @@ export default function CollectionManagement() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="stat-card"
-            style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)', color: 'white' }}
           >
-            <div className="stat-icon" style={{ background: 'rgba(255,255,255,0.1)' }}>
-              <TrendingUp size={24} color="#a5b4fc" />
+            <div className="stat-icon" style={{ background: 'rgba(30,27,75,0.1)' }}>
+              <TrendingUp size={24} color="#1e1b4b" />
             </div>
             <div className="stat-info">
-              <span className="stat-label" style={{ color: '#a5b4fc' }}>Total Projected Revenue</span>
-              <span className="stat-value">₹{totalRevenue.toLocaleString('en-IN')}</span>
+              <span className="stat-label" style={{ color: 'black', fontWeight: 600 }}>Total Projected Revenue</span>
+              <span className="stat-value" style={{ color: 'black' }}>₹{totalRevenue.toLocaleString('en-IN')}</span>
             </div>
           </motion.div>
 
@@ -178,25 +215,11 @@ export default function CollectionManagement() {
               <Users size={24} color="#10b981" />
             </div>
             <div className="stat-info">
-              <span className="stat-label">Total Students Enrolled</span>
-              <span className="stat-value">{totalStudents.toLocaleString()}</span>
+              <span className="stat-label" style={{ color: 'black', fontWeight: 600 }}>Total Students Enrolled</span>
+              <span className="stat-value" style={{ color: 'black' }}>{totalStudents.toLocaleString()}</span>
             </div>
           </motion.div>
 
-          <motion.div 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="stat-card"
-          >
-            <div className="stat-icon" style={{ background: 'rgba(245,158,11,0.1)' }}>
-              <Calculator size={24} color="#f59e0b" />
-            </div>
-            <div className="stat-info">
-              <span className="stat-label">Avg. Collection/Student</span>
-              <span className="stat-value">₹{(totalStudents > 0 ? (totalRevenue / totalStudents) : 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
-            </div>
-          </motion.div>
         </div>
 
         {/* Filters Section */}
@@ -208,7 +231,7 @@ export default function CollectionManagement() {
           
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 15 }}>
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label>Academic Year</label>
+              <label style={{ color: 'black', fontWeight: 600 }}>Academic Year</label>
               <select 
                 value={filters.academic_year_id} 
                 onChange={(e) => setFilters({...filters, academic_year_id: e.target.value})}
@@ -220,7 +243,7 @@ export default function CollectionManagement() {
             </div>
 
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label>School (Institute Type)</label>
+              <label style={{ color: 'black', fontWeight: 600 }}>School (Institute Type)</label>
               <select 
                 value={filters.institute_type_id} 
                 onChange={(e) => setFilters({...filters, institute_type_id: e.target.value})}
@@ -232,7 +255,7 @@ export default function CollectionManagement() {
             </div>
 
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label>Department</label>
+              <label style={{ color: 'black', fontWeight: 600 }}>Department</label>
               <select 
                 value={filters.department_id} 
                 onChange={(e) => setFilters({...filters, department_id: e.target.value})}
@@ -244,7 +267,7 @@ export default function CollectionManagement() {
             </div>
 
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label>Year of Study</label>
+              <label style={{ color: 'black', fontWeight: 600 }}>Year of Study</label>
               <select 
                 value={filters.study_year_id} 
                 onChange={(e) => setFilters({...filters, study_year_id: e.target.value})}
@@ -261,7 +284,7 @@ export default function CollectionManagement() {
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ padding: '20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={{ fontSize: '15px', fontWeight: 700, margin: 0 }}>Revenue Bifurcation Breakdown</h2>
-            <span style={{ fontSize: '12px', color: '#64748b' }}>Showing {collections.length} entries</span>
+            <span style={{ fontSize: '12px', color: 'black' }}>Showing {collections.length} entries</span>
           </div>
 
           <div style={{ overflowX: 'auto' }}>
@@ -274,7 +297,7 @@ export default function CollectionManagement() {
                   <th>Students</th>
                   <th>Avg. Fee</th>
                   <th>Total Revenue</th>
-                  <th>Created</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -296,7 +319,7 @@ export default function CollectionManagement() {
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                           <span style={{ fontSize: '13px', fontWeight: 600 }}>{c.departments?.name}</span>
-                          <span style={{ fontSize: '11px', color: '#64748b' }}>{c.institute_types?.name}</span>
+                          <span style={{ fontSize: '11px', color: 'black' }}>{c.institute_types?.name}</span>
                         </div>
                       </td>
                       <td>
@@ -316,8 +339,14 @@ export default function CollectionManagement() {
                           ₹{(c.total_students * c.amount_per_student).toLocaleString('en-IN')}
                         </span>
                       </td>
-                      <td style={{ fontSize: '11px', color: '#94a3b8' }}>
-                        {new Date(c.created_at).toLocaleDateString()}
+                      <td>
+                        <button 
+                          onClick={() => handleEdit(c)}
+                          className="btn-icon" 
+                          style={{ color: 'var(--primary)', background: 'rgba(37,99,235,0.1)' }}
+                        >
+                          <Edit2 size={14} />
+                        </button>
                       </td>
                     </tr>
                   ))
@@ -342,15 +371,18 @@ export default function CollectionManagement() {
               <div style={{ padding: '25px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ padding: 8, background: 'rgba(37,99,235,0.1)', borderRadius: 8 }}>
-                    <Plus size={20} color="var(--primary)" />
+                    {editingItem ? <Edit2 size={20} color="var(--primary)" /> : <Plus size={20} color="var(--primary)" />}
                   </div>
                   <div>
-                    <h2 style={{ fontSize: '18px', fontWeight: 800, margin: 0 }}>Add Collection Data</h2>
-                    <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Define student count and fee structure</p>
+                    <h2 style={{ fontSize: '18px', fontWeight: 800, margin: 0 }}>{editingItem ? 'Edit' : 'Add'} Collection Data</h2>
+                    <p style={{ fontSize: '12px', color: 'black', margin: 0 }}>Define student count and fee structure</p>
                   </div>
                 </div>
                 <button 
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setEditingItem(null);
+                  }}
                   style={{ background: 'rgba(0,0,0,0.05)', border: 'none', padding: 8, borderRadius: 8, cursor: 'pointer' }}
                 >
                   <ArrowRight size={18} />
@@ -468,11 +500,19 @@ export default function CollectionManagement() {
                 </div>
 
                 <div style={{ marginTop: 30, display: 'flex', gap: 12 }}>
-                  <button type="button" className="btn-outline" style={{ flex: 1 }} onClick={() => setShowAddModal(false)}>
+                  <button 
+                    type="button" 
+                    className="btn-outline" 
+                    style={{ flex: 1 }} 
+                    onClick={() => {
+                      setShowAddModal(false);
+                      setEditingItem(null);
+                    }}
+                  >
                     Cancel
                   </button>
                   <button type="submit" className="btn btn-accent" style={{ flex: 2 }} disabled={isSubmitting}>
-                    {isSubmitting ? 'Saving...' : 'Submit Collection Entry'}
+                    {isSubmitting ? 'Saving...' : editingItem ? 'Update Collection Entry' : 'Submit Collection Entry'}
                   </button>
                 </div>
               </form>
