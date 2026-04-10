@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic';
 import { useState, useEffect, Fragment } from 'react';
 import { 
   BarChart3, Calendar as CalendarIcon, Search, Filter,
