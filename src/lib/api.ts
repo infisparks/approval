@@ -660,6 +660,8 @@ export async function updateProfileAdmin(
     department_id?: string | null;
     institute_id?: string | null;
     institute_type_id?: string | null;
+    is_admin?: boolean;
+    is_locked?: boolean;
   }
 ): Promise<void> {
   const finalUpdates = { ...updates };
