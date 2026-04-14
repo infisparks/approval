@@ -5,7 +5,8 @@ import {
   AlertCircle, CheckSquare, FileText, FileCog, CheckCircle2,
   FileSignature, FileQuestion, Inbox, Clock, RotateCcw,
   XCircle, Banknote, Plus, ArrowRight, Check, Circle,
-  Download, RefreshCw, Info, User as UserIcon, History as HistoryIcon
+  Download, RefreshCw, Info, User as UserIcon, History as HistoryIcon,
+  Eye, Paperclip, ExternalLink
 } from 'lucide-react';
 import DownloadPDFButton from '@/components/DownloadPDFButton';
 import AppShell from '@/components/AppShell';
@@ -83,7 +84,31 @@ function DiffText({ oldText, newText }: { oldText: string, newText: string }) {
 }
 
 
-// ─── Approval Modal ───────────────────────────────────────────────────────────
+// ─── Media Viewer ─────────────────────────────────────────────────────────────
+
+function MediaViewer({ url, onClose }: { url: string; onClose: () => void }) {
+  return (
+    <div className="overlay" style={{ zIndex: 3000, background: 'rgba(0,0,0,0.95)', cursor: 'zoom-out' }} onClick={onClose}>
+      <button 
+        onClick={onClose}
+        style={{ position: 'absolute', top: 20, right: 20, background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: 40, height: 40, color: '#fff', cursor: 'pointer', zIndex: 3001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
+        <XCircle size={24} />
+      </button>
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+        <img 
+          src={url} 
+          alt="Original" 
+          style={{ maxWidth: '95%', maxHeight: '95%', objectFit: 'contain', borderRadius: 8, boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }} 
+          onClick={e => e.stopPropagation()}
+        />
+      </div>
+      <div style={{ position: 'absolute', bottom: 30, left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.5)', padding: '8px 20px', borderRadius: 30, color: '#fff', fontSize: 13, fontWeight: 700, backdropFilter: 'blur(10px)' }}>
+        Viewing Attachment
+      </div>
+    </div>
+  );
+}
 
 function ApprovalModal({
   req, onClose, onDone,
@@ -92,6 +117,7 @@ function ApprovalModal({
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [showRevisions, setShowRevisions] = useState(false);
+  const [viewingMedia, setViewingMedia] = useState<string | null>(null);
 
   const allSteps = req.approval_templates?.template_steps?.sort((a, b) => a.step_order - b.step_order) || [];
   const requesterRank = (req.profiles?.designations as any)?.rank || 0;
@@ -192,6 +218,47 @@ function ApprovalModal({
                   BIFURCATION
                 </div>
                 <BifurcationTable data={req.bifurcation} onChange={() => {}} readOnly />
+              </div>
+            )}
+
+            {/* Attachments Section */}
+            {req.attachments && req.attachments.length > 0 && (
+              <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', letterSpacing: 1, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Paperclip size={12} /> SUPPORTING DOCUMENTS
+                </div>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  {req.attachments.map((url, i) => {
+                    const isImg = /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(url);
+                  const isPdf = /\.pdf$/i.test(url);
+                  return (
+                    <div 
+                      key={i} 
+                      onClick={() => isImg ? setViewingMedia(url) : window.open(url, '_blank')}
+                      style={{ 
+                        width: 100, height: 100, borderRadius: 12, border: '1.5px solid var(--border)', overflow: 'hidden', position: 'relative', cursor: 'pointer', background: '#f8fafc',
+                        transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'}
+                      onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                    >
+                      {isImg ? (
+                        <img src={url} alt="attachment" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 6 }}>
+                          <FileText size={24} color="var(--slate-light)" />
+                          <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', textAlign: 'center', padding: '0 4px', textTransform: 'uppercase' }}>
+                             {isPdf ? 'VIEW PDF' : ('VIEW ' + (url.split('.').pop()?.toUpperCase().slice(0, 4) || 'FILE'))}
+                          </span>
+                        </div>
+                      )}
+                      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '4px', background: 'rgba(255,255,255,0.9)', display: 'flex', justifyContent: 'center' }}>
+                         <Eye size={12} color="var(--accent)" />
+                      </div>
+                    </div>
+                  )
+                  })}
+                </div>
               </div>
             )}
           </div>
@@ -352,6 +419,7 @@ function ApprovalModal({
           </button>
         </div>
       </div>
+      {viewingMedia && <MediaViewer url={viewingMedia} onClose={() => setViewingMedia(null)} />}
     </div>
   );
 }
@@ -368,6 +436,7 @@ function RequestDetailModal({
   const [bifurcation, setBifurcation] = useState<BifurcationItem[]>(req.bifurcation || []);
   const [loading, setLoading] = useState(false);
   const [showRevisions, setShowRevisions] = useState(false);
+  const [viewingMedia, setViewingMedia] = useState<string | null>(null);
 
   const allSteps = req.approval_templates?.template_steps?.sort((a, b) => a.step_order - b.step_order) || [];
   const requesterRank = (req.profiles?.designations as any)?.rank || 0;
@@ -440,8 +509,48 @@ function RequestDetailModal({
               
               {req.has_amount && req.bifurcation && Array.isArray(req.bifurcation) && req.bifurcation.length > 0 && (
                 <div style={{ marginTop: 20 }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', letterSpacing: 1, marginBottom: 8 }}>BIFURCATION</div>
                   <BifurcationTable data={req.bifurcation} onChange={() => {}} readOnly />
+                </div>
+              )}
+
+              {/* Attachments Section */}
+              {req.attachments && req.attachments.length > 0 && (
+                <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', letterSpacing: 1, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Paperclip size={12} /> SUPPORTING DOCUMENTS
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    {req.attachments.map((url, i) => {
+                      const isImg = /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(url);
+                      const isPdf = /\.pdf$/i.test(url);
+                      return (
+                        <div 
+                          key={i} 
+                          onClick={() => isImg ? setViewingMedia(url) : window.open(url, '_blank')}
+                          style={{ 
+                            width: 100, height: 100, borderRadius: 12, border: '1.5px solid var(--border)', overflow: 'hidden', position: 'relative', cursor: 'pointer', background: '#f8fafc',
+                            transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'}
+                          onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                        >
+                          {isImg ? (
+                          <img src={url} alt="attachment" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 6 }}>
+                            <FileText size={24} color="var(--slate-light)" />
+                            <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', textAlign: 'center', padding: '0 4px', textTransform: 'uppercase' }}>
+                               {isPdf ? 'VIEW PDF' : ('VIEW ' + (url.split('.').pop()?.toUpperCase().slice(0, 4) || 'FILE'))}
+                            </span>
+                          </div>
+                        )}
+                          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '4px', background: 'rgba(255,255,255,0.9)', display: 'flex', justifyContent: 'center' }}>
+                            <Eye size={12} color="var(--accent)" />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               )}
             </div>
@@ -651,6 +760,7 @@ function RequestDetailModal({
           </div>
         )}
       </div>
+      {viewingMedia && <MediaViewer url={viewingMedia} onClose={() => setViewingMedia(null)} />}
     </div>
   );
 }

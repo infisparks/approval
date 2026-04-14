@@ -132,6 +132,7 @@ export interface ApprovalRequest {
   current_step_role?: string;
   revisions?: Revision[];
   settlement_requests?: SettlementRequest[];
+  attachments?: string[];
 }
 
 export interface AcademicYear {

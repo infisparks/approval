@@ -81,6 +81,24 @@ export async function getCurrentProfile(): Promise<UserProfile | null> {
   return data;
 }
 
+export async function uploadAttachment(file: File): Promise<string> {
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+  const filePath = `requests/${fileName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('attachments')
+    .upload(filePath, file);
+
+  if (uploadError) throw uploadError;
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('attachments')
+    .getPublicUrl(filePath);
+
+  return publicUrl;
+}
+
 export async function signIn(email: string, password: string): Promise<void> {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
@@ -411,7 +429,7 @@ export async function getRequestsByRequester(): Promise<ApprovalRequest[]> {
 export async function createRequest(
   templateId: string, title: string, content: Record<string, string>,
   cellId: string, hasAmount = false, amount = 0.0,
-  bifurcation: any = null, budgetProvisions = true
+  bifurcation: any = null, budgetProvisions = true, attachments: string[] = []
 ): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('User not authenticated');
@@ -445,7 +463,7 @@ export async function createRequest(
   const { error } = await supabase.from('approval_requests').insert({
     template_id: templateId, requester_id: user.id, cell_id: cellId, title, content,
     current_step_id: currentStepId || null, status: isFullyApproved ? 'approved' : 'pending',
-    has_amount: hasAmount, amount, bifurcation, budget_provisions: budgetProvisions,
+    has_amount: hasAmount, amount, bifurcation, budget_provisions: budgetProvisions, attachments
   });
   if (error) throw error;
 }
@@ -732,7 +750,7 @@ export async function getSettlements(): Promise<SettlementRequest[]> {
 
   let query = supabase.from('settlement_requests').select(`
     *,
-    profiles(*),
+    profiles(*, institute_types(*)),
     approval_requests(*, profiles!requester_id(*, designations(*)), approval_templates(*)),
     settlement_approvals(*, profiles(*, designations(*)))
   `);

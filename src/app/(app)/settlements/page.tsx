@@ -3,8 +3,8 @@
 import React, { useState, useEffect, Fragment } from 'react';
 import { 
   Receipt, Plus, Search, CheckCircle2, 
-  Clock, XCircle, ChevronRight, AlertCircle, TrendingDown, TrendingUp, X,
-  Package, Calculator, Landmark, ShieldCheck, History as HistoryIcon, ArrowBigLeft, ArrowRight, FileText, Wallet, Save
+  Clock, XCircle, ChevronRight, AlertCircle, TrendingDown, TrendingUp, X, MapPin, ExternalLink, Eye,
+  Package, Calculator, Landmark, ShieldCheck, History as HistoryIcon, ArrowBigLeft, ArrowRight, FileText, Wallet, Save, File, Download
 } from 'lucide-react';
 import { 
   getSettlements, createSettlement, 
@@ -15,6 +15,8 @@ import { SettlementRequest, ApprovalRequest } from '@/lib/types';
 import { useAuth } from '@/lib/auth-context';
 import { motion, AnimatePresence } from 'framer-motion';
 import AppShell from '@/components/AppShell';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 export default function SettlementsPage() {
   const [settlements, setSettlements] = useState<SettlementRequest[]>([]);
@@ -22,11 +24,137 @@ export default function SettlementsPage() {
   const [loading, setLoading] = useState(true);
   const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
   const [selectedSettlement, setSelectedSettlement] = useState<SettlementRequest | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'pending' | 'my' | 'approved_by_me' | 'all'>('pending');
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const { profile } = useAuth();
+
+  useEffect(() => {
+    if (profile) {
+      const isS = profile?.designations?.name?.toLowerCase().includes('store') || 
+                 profile?.designations?.name?.toLowerCase() === 'accountant' ||
+                 profile?.designations?.name?.toLowerCase() === 'director' ||
+                 profile?.designations?.name?.toLowerCase().includes('deputy chief accountant');
+      setActiveTab(isS ? 'pending' : 'my');
+    }
+  }, [profile]);
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  const generatePDF = async (s: SettlementRequest) => {
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const letterheadUrl = s.profiles?.institute_types?.letterhead_url;
+    
+    // Create a temporary container for PDF generation
+    const container = document.createElement('div');
+    container.style.width = '800px';
+    container.style.padding = '40px';
+    container.style.background = '#fff';
+    container.style.position = 'fixed';
+    container.style.top = '-10000px';
+    container.style.fontFamily = 'Inter, sans-serif';
+    
+    container.innerHTML = `
+      <div style="margin-bottom: 30px; text-align: center;">
+        ${letterheadUrl ? `<img src="${letterheadUrl}" style="max-width: 100%; height: auto;" />` : `<h1 style="color: var(--accent); margin: 0;">SETTLEMENT VOUCHER</h1>`}
+        <div style="height: 2px; background: #eee; margin-top: 20px;"></div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; margin-bottom: 40px;">
+        <div>
+          <h3 style="margin: 0 0 10px; font-weight: 800; color: #000;">SETTLEMENT FOR:</h3>
+          <p style="margin: 0; font-size: 14px; font-weight: 600;">${s.approval_requests?.title}</p>
+          <p style="margin: 4px 0; font-size: 12px; color: #64748b;">${s.approval_requests?.approval_templates?.name}</p>
+        </div>
+        <div style="text-align: right;">
+          <h3 style="margin: 0 0 10px; font-weight: 800; color: #000;">REQUESTER:</h3>
+          <p style="margin: 0; font-size: 14px; font-weight: 700;">${s.profiles?.full_name}</p>
+          <p style="margin: 4px 0; font-size: 12px; color: #64748b;">Date: ${new Date(s.updated_at).toLocaleDateString('en-IN')}</p>
+        </div>
+      </div>
+
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 40px;">
+        <thead>
+          <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+            <th style="padding: 12px; text-align: left; font-size: 12px; font-weight: 800;">DESCRIPTION</th>
+            <th style="padding: 12px; text-align: right; font-size: 12px; font-weight: 800;">BUDGETED (₹)</th>
+            <th style="padding: 12px; text-align: right; font-size: 12px; font-weight: 800;">ACTUAL SPENT (₹)</th>
+            <th style="padding: 12px; text-align: right; font-size: 12px; font-weight: 800;">VARIANCE</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(s.actual_bifurcation || []).map((item: any, i: number) => {
+            const original = s.approval_requests?.bifurcation?.[i]?.total || 0;
+            const variance = Number(item.total) - original;
+            return `
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 12px; font-size: 13px;">${item.description}</td>
+                <td style="padding: 12px; text-align: right; font-size: 13px;">${original.toLocaleString('en-IN')}</td>
+                <td style={{ padding: 12, textAlign: 'right', font-size: 13, fontWeight: 700 }}>${Number(item.total).toLocaleString('en-IN')}</td>
+                <td style="padding: 12px; text-align: right; font-size: 13px; font-weight: 700; color: ${variance > 0 ? '#ef4444' : variance < 0 ? '#10b981' : '#64748b'};">
+                  ${variance > 0 ? '+' : ''}${variance.toLocaleString('en-IN')}
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+        <tfoot>
+          <tr style="border-top: 2px solid #e2e8f0; background: #f8fafc;">
+            <td style="padding: 15px; font-size: 14px; font-weight: 800;">TOTALS</td>
+            <td style="padding: 15px; text-align: right; font-size: 14px; font-weight: 800;">${s.original_amount.toLocaleString('en-IN')}</td>
+            <td style="padding: 15px; text-align: right; font-size: 15px; font-weight: 800; color: #38bdf8;">${s.actual_amount.toLocaleString('en-IN')}</td>
+            <td style="padding: 15px; text-align: right; font-size: 14px; font-weight: 800;">${(s.actual_amount - s.original_amount).toLocaleString('en-IN')}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      ${(s.advance_logs && s.advance_logs.length > 0) ? `
+        <div style="margin-bottom: 40px;">
+          <h3 style="font-size: 12px; font-weight: 800; color: #64748b; margin-bottom: 15px;">ADVANCE PAYMENTS HISTORY</h3>
+          <table style="width: 100%; border-collapse: collapse;">
+            ${(s.advance_logs || []).map((l: any) => `
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px; font-size: 12px;">${new Date(l.date).toLocaleDateString('en-IN')}</td>
+                <td style="padding: 10px; font-size: 12px; font-weight: 600;">${l.description}</td>
+                <td style="padding: 10px; text-align: right; font-size: 12px; font-weight: 800;">₹${Number(l.amount).toLocaleString('en-IN')}</td>
+              </tr>
+            `).join('')}
+          </table>
+        </div>
+      ` : ''}
+
+      <div style="margin-top: 80px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
+        ${(s.settlement_approvals || []).map((a: any) => `
+          <div style="text-align: center;">
+            <div style="height: 60px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
+              ${a.profiles?.signature ? `<img src="${a.profiles.signature}" style="max-height: 50px; max-width: 100px; object-fit: contain;" />` : '<div style="border-bottom: 1px solid #ccc; width: 80%;"></div>'}
+            </div>
+            <p style="margin: 0; font-size: 11px; font-weight: 800;">${a.profiles?.full_name}</p>
+            <p style="margin: 2px 0; font-size: 10px; color: #64748b;">${a.profiles?.designations?.name}</p>
+            <p style="margin: 2px 0; font-size: 9px; color: #cbd5e1;">${a.step_key.toUpperCase()}</p>
+          </div>
+        `).join('')}
+      </div>
+    `;
+
+    document.body.appendChild(container);
+    try {
+      const canvas = await html2canvas(container, { scale: 2, useCORS: true });
+      const imgData = canvas.toDataURL('image/png');
+      const imgProps = doc.getImageProperties(imgData);
+      const pdfWidth = doc.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      doc.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      doc.save(`Settlement_${s.approval_requests?.title.replace(/\s+/g, '_')}.pdf`);
+    } catch (err) {
+      console.error('PDF Generation Error:', err);
+      alert('Failed to generate PDF. Please ensure all images (letterhead, signatures) are valid.');
+    } finally {
+      document.body.removeChild(container);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -37,10 +165,19 @@ export default function SettlementsPage() {
       ]);
       setSettlements(received);
       setApprovedRequests(approveds.filter(r => {
-        const settledAmount = (r.settlement_requests || [])
-          .filter(s => s.status !== 'rejected')
-          .reduce((acc, s) => acc + (s.actual_amount || 0), 0);
-        return r.status === 'approved' && settledAmount < (r.amount || 0);
+        // SECURITY: Ensure we only show requests where the current user is the requester
+        if (r.requester_id !== profile?.id) return false;
+        
+        if (r.status !== 'approved') return false;
+        if (!r.has_amount) return false;
+        
+        // PostgREST might return an array or a single object for 1-to-1 relations
+        const settlements = Array.isArray(r.settlement_requests) 
+          ? r.settlement_requests 
+          : (r.settlement_requests ? [r.settlement_requests] : []);
+          
+        const hasActiveSettlement = settlements.some((s: any) => s.status !== 'rejected');
+        return !hasActiveSettlement;
       }));
     } catch (error) {
       console.error('Failed to fetch settlements:', error);
@@ -50,19 +187,19 @@ export default function SettlementsPage() {
   };
 
   const handleApply = async (requestId: string) => {
+    if (submitting) return;
     const req = approvedRequests.find(r => r.id === requestId);
     if (!req) return;
+    setSubmitting(true);
     try {
-      const settledAmount = (req.settlement_requests || [])
-        .filter(s => s.status !== 'rejected')
-        .reduce((acc, s) => acc + (s.actual_amount || 0), 0);
-      const remainingAmount = (req.amount || 0) - settledAmount;
-      
+      const remainingAmount = req.amount || 0;
       await createSettlement(requestId, req.bifurcation, remainingAmount);
       setIsApplyModalOpen(false);
-      fetchData();
+      await fetchData();
     } catch (error) {
-      alert('Failed to create settlement request');
+      alert('This request is already being processed or a settlement already exists.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -75,6 +212,21 @@ export default function SettlementsPage() {
   const isAccountant = profile?.designations?.name?.toLowerCase() === 'accountant';
   const isDirector = profile?.designations?.name?.toLowerCase() === 'director';
   const isDeputyChiefAccountant = profile?.designations?.name?.toLowerCase().includes('deputy chief accountant');
+
+  const filteredSettlements = settlements.filter(s => {
+    if (activeTab === 'all') return true;
+    if (activeTab === 'my') return s.requester_id === profile?.id;
+    if (activeTab === 'approved_by_me') {
+       return (s.settlement_approvals || []).some(a => a.approver_id === profile?.id);
+    }
+    if (activeTab === 'pending') {
+       return (isStore && s.current_step === 'store') || 
+              (isAccountant && (s.current_step === 'accountant' || s.current_step === 'accountant_final')) || 
+              (isDirector && s.current_step === 'director') || 
+              (isDeputyChiefAccountant && s.current_step === 'deputy_chief_accountant');
+    }
+    return true;
+  });
 
   const actions = (
     <button className="btn btn-primary" onClick={() => setIsApplyModalOpen(true)}>
@@ -125,11 +277,68 @@ export default function SettlementsPage() {
       </div>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
-          <h2 style={{ fontSize: '15px', fontWeight: 800, margin: 0, letterSpacing: '-0.3px' }}>Settlement Ledger</h2>
-          <div className="search-box" style={{ width: 280 }}>
+        <div style={{ padding: '0 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
+           <div style={{ display: 'flex', gap: 30 }}>
+              <button 
+                onClick={() => setActiveTab('pending')}
+                style={{ 
+                  padding: '20px 0', 
+                  fontSize: '13px', 
+                  fontWeight: 800, 
+                  color: activeTab === 'pending' ? 'var(--accent)' : 'var(--slate)',
+                  borderBottom: `2px solid ${activeTab === 'pending' ? 'var(--accent)' : 'transparent'}`,
+                  background: 'none', borderLeft: 'none', borderRight: 'none', borderTop: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                Pending Review ({settlements.filter(s => (isStore && s.current_step === 'store') || (isAccountant && (s.current_step === 'accountant' || s.current_step === 'accountant_final')) || (isDirector && s.current_step === 'director') || (isDeputyChiefAccountant && s.current_step === 'deputy_chief_accountant')).length})
+              </button>
+              <button 
+                onClick={() => setActiveTab('my')}
+                style={{ 
+                  padding: '20px 0', 
+                  fontSize: '13px', 
+                  fontWeight: 800, 
+                  color: activeTab === 'my' ? 'var(--accent)' : 'var(--slate)',
+                  borderBottom: `2px solid ${activeTab === 'my' ? 'var(--accent)' : 'transparent'}`,
+                  background: 'none', borderLeft: 'none', borderRight: 'none', borderTop: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                My Settlements
+              </button>
+              <button 
+                onClick={() => setActiveTab('approved_by_me')}
+                style={{ 
+                  padding: '20px 0', 
+                  fontSize: '13px', 
+                  fontWeight: 800, 
+                  color: activeTab === 'approved_by_me' ? 'var(--accent)' : 'var(--slate)',
+                  borderBottom: `2px solid ${activeTab === 'approved_by_me' ? 'var(--accent)' : 'transparent'}`,
+                  background: 'none', borderLeft: 'none', borderRight: 'none', borderTop: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                Approved By Me
+              </button>
+              <button 
+                onClick={() => setActiveTab('all')}
+                style={{ 
+                  padding: '20px 0', 
+                  fontSize: '13px', 
+                  fontWeight: 800, 
+                  color: activeTab === 'all' ? 'var(--accent)' : 'var(--slate)',
+                  borderBottom: `2px solid ${activeTab === 'all' ? 'var(--accent)' : 'transparent'}`,
+                  background: 'none', borderLeft: 'none', borderRight: 'none', borderTop: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                All Records
+              </button>
+           </div>
+          <div className="search-box" style={{ width: 240 }}>
             <Search size={16} />
-            <input type="text" placeholder="Search settlement history..." />
+            <input type="text" placeholder="Search..." />
           </div>
         </div>
 
@@ -153,6 +362,7 @@ export default function SettlementsPage() {
                 <tr>
                   <th>Request Title</th>
                   <th>Requester</th>
+                  <th>Vendor Info</th>
                   <th>Original</th>
                   <th>Actual</th>
                   <th>Advance (₹)</th>
@@ -162,7 +372,7 @@ export default function SettlementsPage() {
                 </tr>
               </thead>
               <tbody>
-                {settlements.map((s) => {
+                {filteredSettlements.map((s) => {
                   const variance = s.actual_amount - s.original_amount;
                   const isSelected = selectedSettlement?.id === s.id;
                   
@@ -178,8 +388,62 @@ export default function SettlementsPage() {
                              <div className="avatar-xs" style={{ background: 'var(--navy-light)' }}>{s.profiles?.full_name?.[0]}</div>
                              <div>
                                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--midnight)' }}>{s.profiles?.full_name}</div>
-                               <div style={{ fontSize: '10px', color: 'var(--slate)' }}>ID: {s.id.slice(0, 8)}</div>
                              </div>
+                           </div>
+                        </td>
+                        <td style={{ borderBottom: isSelected ? 'none' : '1px solid var(--border)' }}>
+                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {(s.actual_bifurcation || []).slice(0, 2).map((item: any, idx: number) => (
+                                <div key={idx} style={{ 
+                                  padding: '8px 12px', 
+                                  background: 'rgba(56,189,248,0.03)', 
+                                  borderRadius: 10, 
+                                  border: '1px solid rgba(56,189,248,0.1)',
+                                  minWidth: 160
+                                }}>
+                                  <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--midnight)' }}>{item.vendor_name || item.description || 'Vendor Info'}</div>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                                     <span style={{ fontSize: 10, color: 'var(--slate)', fontWeight: 600 }}>{item.vendor_phone || '9958399157'}</span>
+                                     <button 
+                                       onClick={(e) => {
+                                         e.stopPropagation();
+                                         const url = item.attachment || s.approval_requests?.attachments?.[0];
+                                         if (url?.toLowerCase().endsWith('.pdf')) window.open(url, '_blank');
+                                         else if (url) setViewerUrl(url);
+                                       }}
+                                       style={{ 
+                                         fontSize: 9, 
+                                         fontWeight: 800, 
+                                         color: 'var(--accent)', 
+                                         background: '#fff', 
+                                         padding: '2px 8px', 
+                                         border: '1px solid var(--border)',
+                                         borderRadius: 6,
+                                         cursor: 'pointer',
+                                         boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                                       }}
+                                     >
+                                       Details Attached
+                                     </button>
+                                  </div>
+                                </div>
+                              ))}
+                              {(s.actual_bifurcation?.length || 0) > 2 && (
+                                <div style={{ fontSize: 10, color: 'var(--slate)', fontWeight: 600, textAlign: 'center' }}>+{s.actual_bifurcation!.length - 2} more</div>
+                              )}
+                              {(!s.actual_bifurcation || s.actual_bifurcation.length === 0) && (
+                                <div style={{ 
+                                  padding: '8px 12px', 
+                                  background: '#f8fafc', 
+                                  borderRadius: 10, 
+                                  border: '1px dashed var(--border)',
+                                  fontSize: 10,
+                                  color: 'var(--slate)',
+                                  textAlign: 'center'
+                                }}>
+                                  No vendor info
+                                </div>
+                              )}
                            </div>
                         </td>
                         <td style={{ fontWeight: 600, borderBottom: isSelected ? 'none' : '1px solid var(--border)' }}>₹{s.original_amount.toLocaleString('en-IN')}</td>
@@ -221,33 +485,44 @@ export default function SettlementsPage() {
                            </div>
                         </td>
                         <td style={{ textAlign: 'right', borderBottom: isSelected ? 'none' : '1px solid var(--border)' }}>
-                          <button className="btn btn-sm"
-                            style={{ 
-                              background: isSelected ? 'var(--midnight)' : ((isStore && s.current_step === 'store') || 
-                              (isAccountant && (s.current_step === 'accountant' || s.current_step === 'accountant_final')) || 
-                              (isDirector && s.current_step === 'director') || 
-                              (isDeputyChiefAccountant && s.current_step === 'deputy_chief_accountant')) ? 'var(--accent)' : 'var(--bg-secondary)',
-                              color: isSelected ? '#fff' : ((isStore && s.current_step === 'store') || 
-                              (isAccountant && (s.current_step === 'accountant' || s.current_step === 'accountant_final')) || 
-                              (isDirector && s.current_step === 'director') || 
-                              (isDeputyChiefAccountant && s.current_step === 'deputy_chief_accountant')) ? '#fff' : 'var(--slate)',
-                              padding: '6px 12px',
-                              borderRadius: 8
-                            }} 
-                            onClick={() => setSelectedSettlement(isSelected ? null : s)}
-                          >
-                            {isSelected ? (
-                              <span style={{ fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>Close <X size={14} /></span>
-                            ) : ( (isStore && s.current_step === 'store') || 
-                              (isAccountant && (s.current_step === 'accountant' || s.current_step === 'accountant_final')) || 
-                              (isDirector && s.current_step === 'director') || 
-                              (isDeputyChiefAccountant && s.current_step === 'deputy_chief_accountant') ? (
-                                <span style={{ fontSize: 12, fontWeight: 700 }}>Process</span>
-                              ) : (
-                                <span style={{ fontSize: 12, fontWeight: 700 }}>View</span>
-                              )
+                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                            {s.status === 'approved' && (
+                              <button 
+                                className="btn btn-ghost btn-sm"
+                                onClick={(e) => { e.stopPropagation(); generatePDF(s); }}
+                                style={{ color: 'var(--accent)', background: 'rgba(56,189,248,0.08)', borderRadius: 8, height: 32, width: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              >
+                                <Download size={16} />
+                              </button>
                             )}
-                          </button>
+                            <button className="btn btn-sm"
+                              style={{ 
+                                background: isSelected ? 'var(--midnight)' : ((isStore && s.current_step === 'store') || 
+                                (isAccountant && (s.current_step === 'accountant' || s.current_step === 'accountant_final')) || 
+                                (isDirector && s.current_step === 'director') || 
+                                (isDeputyChiefAccountant && s.current_step === 'deputy_chief_accountant')) ? 'var(--accent)' : 'var(--bg-secondary)',
+                                color: isSelected ? '#fff' : ((isStore && s.current_step === 'store') || 
+                                (isAccountant && (s.current_step === 'accountant' || s.current_step === 'accountant_final')) || 
+                                (isDirector && s.current_step === 'director') || 
+                                (isDeputyChiefAccountant && s.current_step === 'deputy_chief_accountant')) ? '#fff' : 'var(--slate)',
+                                padding: '6px 12px',
+                                borderRadius: 8
+                              }} 
+                              onClick={() => setSelectedSettlement(isSelected ? null : s)}
+                            >
+                              {isSelected ? (
+                                <span style={{ fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>Close <X size={12} /></span>
+                              ) : ( (isStore && s.current_step === 'store') || 
+                                (isAccountant && (s.current_step === 'accountant' || s.current_step === 'accountant_final')) || 
+                                (isDirector && s.current_step === 'director') || 
+                                (isDeputyChiefAccountant && s.current_step === 'deputy_chief_accountant') ? (
+                                  <span style={{ fontSize: 11, fontWeight: 700 }}>Process</span>
+                                ) : (
+                                  <span style={{ fontSize: 11, fontWeight: 700 }}>Details</span>
+                                )
+                              )}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                       
@@ -313,15 +588,11 @@ export default function SettlementsPage() {
                     </div>
                   ) : (
                     approvedRequests.map(r => {
-                      const settledAmount = (r.settlement_requests || [])
-                        .filter(s => s.status !== 'rejected')
-                        .reduce((acc, s) => acc + (s.actual_amount || 0), 0);
-                      const remaining = (r.amount || 0) - settledAmount;
-                      
                       return (
                         <div 
                           key={r.id} 
-                          className="selectable-card"
+                          className={`selectable-card ${submitting ? 'disabled' : ''}`}
+                          style={{ opacity: submitting ? 0.6 : 1, pointerEvents: submitting ? 'none' : 'auto' }}
                           onClick={() => handleApply(r.id)}
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -329,8 +600,7 @@ export default function SettlementsPage() {
                               <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--midnight)' }}>{r.title}</div>
                               <div style={{ fontSize: '11px', color: 'var(--slate)', marginTop: 2 }}>
                                 {r.approval_templates?.name} • 
-                                <span style={{ color: 'var(--accent)', fontWeight: 600 }}> Remaining: ₹{remaining.toLocaleString('en-IN')}</span>
-                                <span style={{ opacity: 0.6 }}> of ₹{r.amount?.toLocaleString('en-IN')}</span>
+                                <span style={{ color: 'var(--accent)', fontWeight: 700 }}> Approved Amount: ₹{(r.amount || 0).toLocaleString('en-IN')}</span>
                               </div>
                             </div>
                             <ChevronRight size={16} style={{ color: 'var(--slate)', opacity: 0.5 }} />
@@ -349,6 +619,10 @@ export default function SettlementsPage() {
       {/* Process Modal */}
       <AnimatePresence>
       </AnimatePresence>
+
+      <AnimatePresence>
+        {viewerUrl && <MediaViewer url={viewerUrl} onClose={() => setViewerUrl(null)} />}
+      </AnimatePresence>
     </AppShell>
   );
 }
@@ -360,11 +634,15 @@ function SettlementProcessInLine({ settlement, onClose, onDone, role }: any) {
   const [expandedVendorIdx, setExpandedVendorIdx] = useState<number | null>(null);
   const [advAmount, setAdvAmount] = useState('');
   const [advDesc, setAdvDesc] = useState('');
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+
+  const attachments = settlement.approval_requests?.attachments || [];
 
   const totalActual = bifurcation.reduce((acc, item) => acc + (Number(item.total) || 0), 0);
   const diff = totalActual - settlement.actual_amount;
 
-  const canEdit = role.isStore && settlement.current_step === 'store';
+  const canEdit = (role.isStore && settlement.current_step === 'store') || 
+                  (role.isAccountant && (settlement.current_step === 'accountant' || settlement.current_step === 'accountant_final'));
   const canApprove = (role.isStore && settlement.current_step === 'store') || 
                      (role.isAccountant && (settlement.current_step === 'accountant' || settlement.current_step === 'accountant_final')) || 
                      (role.isDirector && settlement.current_step === 'director') || 
@@ -448,7 +726,20 @@ function SettlementProcessInLine({ settlement, onClose, onDone, role }: any) {
                    <p style={{ fontWeight: 800, fontSize: '18px', color: 'var(--accent)', margin: 0 }}>₹{settlement.actual_amount.toLocaleString('en-IN')}</p>
                  </div>
               </div>
-           </div>
+              
+              {attachments.length > 0 && (
+                 <div style={{ marginTop: 20, paddingTop: 15, borderTop: '1px solid var(--border)', display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                   {attachments.map((url: string, i: number) => (
+                      <button key={i} onClick={() => url.endsWith('.pdf') ? window.open(url, '_blank') : setViewerUrl(url)} className="btn btn-sm btn-ghost" style={{ background: '#fff', border: '1px solid var(--border)' }}>
+                        <FileText size={14} /> Details Attached
+                      </button>
+                   ))}
+                 </div>
+               )}
+            </div>
+            <AnimatePresence>
+              {viewerUrl && <MediaViewer url={viewerUrl} onClose={() => setViewerUrl(null)} />}
+            </AnimatePresence>
 
            <div className="card" style={{ padding: 0, background: '#fff', border: '1px solid var(--border)', marginBottom: 24, overflow: 'hidden' }}>
               <div style={{ padding: '16px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -866,6 +1157,36 @@ function SettlementProcessInLine({ settlement, onClose, onDone, role }: any) {
              </button>
            )}
         </div>
+    </div>
+  );
+}
+
+function MediaViewer({ url, onClose }: { url: string; onClose: () => void }) {
+  return (
+    <div className="overlay" style={{ background: 'rgba(0,0,0,0.95)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }} onClick={onClose}>
+      <button 
+        className="btn btn-ghost" 
+        style={{ position: 'absolute', top: 30, right: 30, color: '#fff', background: 'rgba(255,255,255,0.1)', padding: 12, borderRadius: '50%' }}
+        onClick={onClose}
+      >
+        <X size={24} />
+      </button>
+      <motion.img 
+        src={url} 
+        alt="Attachment Preview" 
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.9 }}
+        style={{ 
+          maxWidth: '90vw', 
+          maxHeight: '90vh', 
+          objectFit: 'contain',
+          boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+          borderRadius: 12,
+          border: '1px solid rgba(255,255,255,0.1)'
+        }} 
+        onClick={e => e.stopPropagation()}
+      />
     </div>
   );
 }

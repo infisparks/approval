@@ -1,8 +1,8 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { Files, Search, Plus, FileText, ArrowRight, Trash2, PlusCircle, X, CheckCircle2 } from 'lucide-react';
+import { Files, Search, Plus, FileText, ArrowRight, Trash2, PlusCircle, X, CheckCircle2, Paperclip, Image as ImageIcon, File as FileIcon } from 'lucide-react';
 import AppShell from '@/components/AppShell';
-import { getTemplates, getDesignations, proposeTemplate, createRequest, getCells, getPersonTypes, getProfiles } from '@/lib/api';
+import { getTemplates, getDesignations, proposeTemplate, createRequest, getCells, getPersonTypes, getProfiles, uploadAttachment } from '@/lib/api';
 import { ApprovalTemplate, Designation, Cell, PersonType, UserProfile } from '@/lib/types';
 import { useAuth } from '@/lib/auth-context';
 import BifurcationTable, { BifurcationItem } from '@/components/BifurcationTable';
@@ -54,6 +54,32 @@ const selectStyles = {
 };
 
 
+// ─── Media Viewer ─────────────────────────────────────────────────────────────
+
+function MediaViewer({ url, onClose }: { url: string; onClose: () => void }) {
+  return (
+    <div className="overlay" style={{ zIndex: 3000, background: 'rgba(0,0,0,0.95)', cursor: 'zoom-out' }} onClick={onClose}>
+      <button 
+        onClick={onClose}
+        style={{ position: 'absolute', top: 20, right: 20, background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: 40, height: 40, color: '#fff', cursor: 'pointer', zIndex: 3001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
+        <X size={24} />
+      </button>
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+        <img 
+          src={url} 
+          alt="Original" 
+          style={{ maxWidth: '95%', maxHeight: '95%', objectFit: 'contain', borderRadius: 8, boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }} 
+          onClick={e => e.stopPropagation()}
+        />
+      </div>
+      <div style={{ position: 'absolute', bottom: 30, left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.5)', padding: '8px 20px', borderRadius: 30, color: '#fff', fontSize: 13, fontWeight: 700, backdropFilter: 'blur(10px)' }}>
+        Viewing Attachment
+      </div>
+    </div>
+  );
+}
+
 // ─── Compose Letter Modal ──────────────────────────────────────────────────────
 
 function ComposeModal({ template, onClose, onDone }: { template: ApprovalTemplate; onClose: () => void; onDone: () => void }) {
@@ -71,6 +97,9 @@ function ComposeModal({ template, onClose, onDone }: { template: ApprovalTemplat
   const [error, setError] = useState('');
   const [bifurcation, setBifurcation] = useState<BifurcationItem[]>([]);
   const [budgetProvisions, setBudgetProvisions] = useState<boolean | null>(null);
+  const [attachments, setAttachments] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [viewingMedia, setViewingMedia] = useState<string | null>(null);
 
   useEffect(() => {
     if (profile?.institute_id) {
@@ -115,6 +144,24 @@ function ComposeModal({ template, onClose, onDone }: { template: ApprovalTemplat
     c.name.toLowerCase().includes(cellSearch.toLowerCase())
   );
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploading(true); setError('');
+    try {
+      const newUrls = await Promise.all(Array.from(files).map(f => uploadAttachment(f)));
+      setAttachments(prev => [...prev, ...newUrls]);
+    } catch (err) {
+      setError('File upload failed. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeAttachment = (url: string) => {
+    setAttachments(prev => prev.filter(u => u !== url));
+  };
+
   const handleSubmit = async () => {
     if (!subject.trim() || !body.trim() || !cellId || budgetProvisions === null) { 
       setError('Please fill in all fields and confirm Budget Provisions status.'); 
@@ -134,7 +181,8 @@ function ComposeModal({ template, onClose, onDone }: { template: ApprovalTemplat
         hasAmount, 
         hasAmount ? parseFloat(amount) || 0 : 0,
         hasAmount ? bifurcation : null,
-        budgetProvisions ?? true
+        budgetProvisions ?? true,
+        attachments
       );
       onDone(); onClose();
     } catch (e: unknown) {
@@ -277,6 +325,57 @@ function ComposeModal({ template, onClose, onDone }: { template: ApprovalTemplat
             <textarea className="field-input" rows={7} placeholder="Enter your detailed request or reason..." value={body} onChange={e => setBody(e.target.value)} />
           </div>
 
+          <div className="field-group" style={{ marginBottom: 20 }}>
+            <label className="field-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+               <span>Supporting Documents (PDF / Images)</span>
+               {uploading && <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 700 }}>Uploading...</span>}
+            </label>
+            
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+               {attachments.map((url, i) => {
+                  const isImg = /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(url);
+                  const isPdf = /\.pdf$/i.test(url);
+                  return (
+                    <div key={i} style={{ position: 'relative', width: 80, height: 80, borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden', background: '#f8fafc', cursor: 'pointer' }}>
+                       {isImg ? (
+                          <img 
+                            src={url} 
+                            alt="attachment" 
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                            onClick={() => setViewingMedia(url)}
+                          />
+                       ) : (
+                          <div 
+                            style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 6 }}
+                            onClick={() => isPdf ? window.open(url, '_blank') : window.open(url, '_blank')}
+                          >
+                             <FileText size={24} color="var(--slate-light)" />
+                             <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', textAlign: 'center', padding: '0 4px', textTransform: 'uppercase' }}>
+                               {isPdf ? 'VIEW PDF' : 'VIEW ' + (url.split('.').pop()?.toUpperCase() || 'FILE')}
+                             </span>
+                          </div>
+                       )}
+                       <button 
+                         onClick={() => removeAttachment(url)}
+                         style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: '50%', background: 'rgba(239, 68, 68, 0.9)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}
+                       >
+                         <X size={12} />
+                       </button>
+                    </div>
+                  )
+               })}
+               
+               <label style={{ 
+                 width: 80, height: 80, borderRadius: 12, border: '2px dashed var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, cursor: 'pointer', transition: 'all 0.2s',
+                 background: '#fff'
+               }} onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'} onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
+                  <Paperclip size={20} color="var(--slate-light)" />
+                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--slate-light)' }}>ATTACH</span>
+                  <input type="file" multiple hidden onChange={handleFileUpload} />
+               </label>
+            </div>
+          </div>
+
           <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: '16px 18px', marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                <div>
@@ -353,6 +452,7 @@ function ComposeModal({ template, onClose, onDone }: { template: ApprovalTemplat
           </button>
         </div>
       </div>
+      {viewingMedia && <MediaViewer url={viewingMedia} onClose={() => setViewingMedia(null)} />}
     </div>
   );
 }
