@@ -5,7 +5,7 @@ import {
   AlertCircle, CheckSquare, FileText, FileCog, CheckCircle2,
   FileSignature, FileQuestion, Inbox, Clock, RotateCcw,
   XCircle, Banknote, Plus, ArrowRight, Check, Circle,
-  Download, RefreshCw, Info, User as UserIcon
+  Download, RefreshCw, Info, User as UserIcon, History as HistoryIcon
 } from 'lucide-react';
 import DownloadPDFButton from '@/components/DownloadPDFButton';
 import AppShell from '@/components/AppShell';
@@ -13,8 +13,7 @@ import { useAuth } from '@/lib/auth-context';
 import BifurcationTable, { BifurcationItem } from '@/components/BifurcationTable';
 import {
   getPendingApprovals, getApprovalHistory, getRequestsByRequester,
-  approveRequest, rejectRequest, revertRequest, resubmitRequest,
-  getApproversByDesignation
+  approveRequest, rejectRequest, revertRequest, resubmitRequest, getProfileById
 } from '@/lib/api';
 import { ApprovalRequest, ApprovalTemplate, RequestApproval, TemplateStep } from '@/lib/types';
 
@@ -43,6 +42,46 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`badge ${statusBgClass(status)}`}>{label}</span>;
 }
 
+function DiffText({ oldText, newText }: { oldText: string, newText: string }) {
+  const oldLines = (oldText || '').split('\n');
+  const newLines = (newText || '').split('\n');
+  const result: { type: 'added' | 'removed' | 'same', text: string }[] = [];
+  
+  let o = 0;
+  let n = 0;
+  while (o < oldLines.length || n < newLines.length) {
+    if (o < oldLines.length && n < newLines.length && oldLines[o] === newLines[n]) {
+      result.push({ type: 'same', text: oldLines[o] });
+      o++; n++;
+    } else if (n < newLines.length && !oldLines.slice(o).includes(newLines[n])) {
+      result.push({ type: 'added', text: newLines[n] });
+      n++;
+    } else if (o < oldLines.length) {
+      result.push({ type: 'removed', text: oldLines[o] });
+      o++;
+    } else if (n < newLines.length) {
+      result.push({ type: 'added', text: newLines[n] });
+      n++;
+    }
+  }
+
+  return (
+    <div style={{ fontSize: 11, background: 'rgba(0,0,0,0.02)', padding: 10, borderRadius: 8, border: '1px dashed var(--border)', marginTop: 8, fontFamily: 'monospace', whiteSpace: 'pre-wrap', maxHeight: 200, overflowY: 'auto' }}>
+      {result.map((r, i) => (
+        <div key={i} style={{ 
+          color: r.type === 'added' ? 'var(--emerald)' : r.type === 'removed' ? 'var(--rose)' : 'var(--slate)',
+          background: r.type === 'added' ? 'rgba(16,185,129,0.1)' : r.type === 'removed' ? 'rgba(244,63,94,0.1)' : 'transparent',
+          textDecoration: r.type === 'removed' ? 'line-through' : 'none',
+          padding: '1px 4px'
+        }}>
+          {r.type === 'added' ? '+ ' : r.type === 'removed' ? '- ' : '  '}
+          {r.text || ' '}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 
 // ─── Approval Modal ───────────────────────────────────────────────────────────
 
@@ -52,6 +91,24 @@ function ApprovalModal({
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [showRevisions, setShowRevisions] = useState(false);
+
+  const allSteps = req.approval_templates?.template_steps?.sort((a, b) => a.step_order - b.step_order) || [];
+  const requesterRank = (req.profiles?.designations as any)?.rank || 0;
+  const requesterDesignationId = (req.profiles as any)?.designation_id;
+  const amount = req.amount || 0;
+
+  const skipUntilOrder = allSteps.reduce((max, s) => {
+    const stepRank = (s.designations as any)?.rank ?? (s.profiles?.designations as any)?.rank ?? 0;
+    const isUnderOrSame = (stepRank > 0 && stepRank <= requesterRank) || (s.designation_id === requesterDesignationId);
+    return isUnderOrSame ? Math.max(max, s.step_order) : max;
+  }, -1);
+
+  const steps = allSteps.filter(s => s.step_order > skipUntilOrder && (!s.min_amount || amount >= s.min_amount));
+  const hasChanges = req.last_reverted_step_id !== undefined;
+  const currentStepObj = steps.find(s => s.id === req.current_step_id);
+  const currentStepOrder = currentStepObj?.step_order || 0;
+  const actionableSteps = steps.filter(s => s.step_order <= currentStepOrder);
 
   const act = async (action: 'approve' | 'reject' | 'revert') => {
     if (action === 'revert' && !comment.trim()) {
@@ -60,9 +117,9 @@ function ApprovalModal({
     setError('');
     setLoading(action);
     try {
-      if (action === 'approve') await approveRequest(req.id, req.current_step_order, comment);
-      else if (action === 'reject') await rejectRequest(req.id, req.current_step_order, comment);
-      else await revertRequest(req.id, req.current_step_order, comment);
+      if (action === 'approve') await approveRequest(req.id, currentStepOrder, comment);
+      else if (action === 'reject') await rejectRequest(req.id, currentStepOrder, comment);
+      else await revertRequest(req.id, currentStepOrder, comment);
       onDone();
       onClose();
     } catch (e: unknown) {
@@ -71,9 +128,6 @@ function ApprovalModal({
       setLoading(null);
     }
   };
-
-  const steps = req.approval_templates?.template_steps?.sort((a, b) => a.step_order - b.step_order) || [];
-  const hasChanges = req.last_reverted_step_order !== undefined;
 
   return (
     <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -120,7 +174,7 @@ function ApprovalModal({
         <div className="modal-body">
           {error && <div className="auth-error" style={{ marginBottom: 16 }}>{error}</div>}
 
-          {/* Letter content with Diff Viewer */}
+          {/* Letter content section */}
           <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: 18, marginBottom: 16 }}>
             <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', letterSpacing: 1, marginBottom: 6 }}>SUBJECT</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--midnight)', marginBottom: 14 }}>{req.content?.subject ?? req.title}</div>
@@ -131,7 +185,7 @@ function ApprovalModal({
             <div style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--slate)', whiteSpace: 'pre-wrap' }}>
               {req.content?.body ?? 'No body provided.'}
             </div>
-            
+
             {req.has_amount && req.bifurcation && Array.isArray(req.bifurcation) && req.bifurcation.length > 0 && (
               <div style={{ marginTop: 20 }}>
                 <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', letterSpacing: 1, marginBottom: 8 }}>
@@ -142,16 +196,85 @@ function ApprovalModal({
             )}
           </div>
 
+          {/* Revisions Section */}
+          {req.revisions && req.revisions.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--rose)', letterSpacing: 1.5 }}>RECENT CHANGES</div>
+                <button 
+                  onClick={() => setShowRevisions(!showRevisions)}
+                  style={{ 
+                    background: showRevisions ? 'var(--rose)' : 'rgba(244,63,94,0.1)', 
+                    color: showRevisions ? '#fff' : 'var(--rose)',
+                    border: 'none', borderRadius: 20, padding: '4px 10px', fontSize: 10, fontWeight: 800, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 4, transition: 'all 0.2s'
+                  }}
+                >
+                  <HistoryIcon size={12} />
+                  {showRevisions ? 'HIDE HISTORY' : 'VIEW HISTORY'}
+                </button>
+              </div>
+
+              {showRevisions && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {req.revisions.map((rev) => {
+                    const c = rev.changes.content;
+                    const fromS = (c?.from as any)?.subject;
+                    const toS = (c?.to as any)?.subject;
+                    const fromB = (c?.from as any)?.body;
+                    const toB = (c?.to as any)?.body;
+                    const isSChanged = c && fromS !== toS;
+                    const isBChanged = c && fromB !== toB;
+
+                    return (
+                      <div key={rev.id} style={{ padding: '12px 16px', borderRadius: 12, background: 'rgba(244,63,94,0.03)', border: '1px solid rgba(244,63,94,0.1)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--rose)' }} />
+                            <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--rose)' }}>REVISION FILED</span>
+                          </div>
+                          <span style={{ fontSize: 10, color: 'var(--slate-light)', fontWeight: 600 }}>
+                            {new Date(rev.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {rev.changes.amount && (
+                            <div style={{ fontSize: 13, color: 'var(--midnight)' }}>
+                              <span style={{ fontWeight: 800 }}>Amount:</span> ₹{rev.changes.amount.from} → <span style={{ color: 'var(--emerald)', fontWeight: 800 }}>₹{rev.changes.amount.to}</span>
+                            </div>
+                          )}
+                          {isSChanged && (
+                            <div style={{ fontSize: 13, color: 'var(--midnight)' }}>
+                              <span style={{ fontWeight: 800 }}>Subject:</span> <span style={{ color: 'var(--slate)', textDecoration: 'line-through' }}>{fromS}</span> → <span style={{ color: 'var(--emerald)', fontWeight: 800 }}>{toS}</span>
+                            </div>
+                          )}
+                          {isBChanged && (
+                            <div style={{ fontSize: 13, color: 'var(--midnight)' }}>
+                              <span style={{ fontWeight: 800 }}>Body:</span> Updated
+                              <DiffText oldText={fromB} newText={toB} />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+       
+       )}
+
           {/* Approval Chain history */}
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', letterSpacing: 1.5, marginBottom: 12 }}>APPROVAL HISTORY & FEEDBACK</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {steps.filter(s => s.step_order <= req.current_step_order).map((step) => {
+              {actionableSteps.map((step) => {
                 const hist = (req.request_approvals || [])
                   .filter(a => a.step_order === step.step_order)
                   .sort((a, b) => new Date(b.acted_at ?? 0).getTime() - new Date(a.acted_at ?? 0).getTime());
                 
-                const isCurrent = step.step_order === req.current_step_order;
+                const isCurrent = step.id === req.current_step_id;
                 if (hist.length === 0 && !isCurrent) return null;
 
                 return (
@@ -172,7 +295,9 @@ function ApprovalModal({
                         </div>
                         <div>
                           <div style={{ fontSize: 9, color: 'var(--slate)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 1 }}>{step.role_label || 'Approver'}</div>
-                          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--midnight)' }}>{step.designations?.name ?? 'Approver'}</div>
+                          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--midnight)' }}>
+                            {step.approver_id && step.profiles ? step.profiles.full_name : (step.profiles?.designations?.name ?? 'Approver')}
+                          </div>
                           <div style={{ fontSize: 9, color: isCurrent ? 'var(--gold)' : 'var(--emerald)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                             {isCurrent ? 'YOUR CURRENT STEP' : 'OFFICIALLY SIGNED'}
                           </div>
@@ -242,8 +367,20 @@ function RequestDetailModal({
   const [amount, setAmount] = useState(String(req.amount ?? 0));
   const [bifurcation, setBifurcation] = useState<BifurcationItem[]>(req.bifurcation || []);
   const [loading, setLoading] = useState(false);
+  const [showRevisions, setShowRevisions] = useState(false);
 
-  const steps = req.approval_templates?.template_steps?.sort((a, b) => a.step_order - b.step_order) || [];
+  const allSteps = req.approval_templates?.template_steps?.sort((a, b) => a.step_order - b.step_order) || [];
+  const requesterRank = (req.profiles?.designations as any)?.rank || 0;
+  const requesterDesignationId = (req.profiles as any)?.designation_id;
+  const reqAmount = req.amount || 0;
+
+  const skipUntilOrder = allSteps.reduce((max, s) => {
+    const stepRank = (s.designations as any)?.rank ?? (s.profiles?.designations as any)?.rank ?? 0;
+    const isUnderOrSame = (stepRank > 0 && stepRank <= requesterRank) || (s.designation_id === requesterDesignationId);
+    return isUnderOrSame ? Math.max(max, s.step_order) : max;
+  }, -1);
+
+  const steps = allSteps.filter(s => s.step_order > skipUntilOrder && (!s.min_amount || reqAmount >= s.min_amount));
 
   const doResubmit = async () => {
     setLoading(true);
@@ -342,7 +479,65 @@ function RequestDetailModal({
             </div>
           )}
 
-          {/* Timeline */}
+          {/* Revisions Section */}
+          {req.revisions && req.revisions.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--rose)', letterSpacing: 1.5 }}>RECENT REVISIONS</div>
+                <button 
+                  onClick={() => setShowRevisions(!showRevisions)}
+                  style={{ 
+                    background: showRevisions ? 'var(--rose)' : 'rgba(244,63,94,0.1)', 
+                    color: showRevisions ? '#fff' : 'var(--rose)',
+                    border: 'none', borderRadius: 20, padding: '4px 10px', fontSize: 10, fontWeight: 800, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 4, transition: 'all 0.2s'
+                  }}
+                >
+                  <HistoryIcon size={12} />
+                  {showRevisions ? 'HIDE' : 'VIEW'}
+                </button>
+              </div>
+
+              {showRevisions && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {req.revisions.map((rev) => {
+                    const c = rev.changes.content;
+                    const isSChanged = c && (c.from as any)?.subject !== (c.to as any)?.subject;
+                    const isBChanged = c && (c.from as any)?.body !== (c.to as any)?.body;
+
+                    return (
+                      <div key={rev.id} style={{ padding: '12px 16px', borderRadius: 12, background: 'rgba(244,63,94,0.03)', border: '1px solid rgba(244,63,94,0.1)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--rose)' }}>CHANGES APPLIED</span>
+                          <span style={{ fontSize: 10, color: 'var(--slate-light)', fontWeight: 600 }}>
+                            {new Date(rev.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {rev.changes.amount && (
+                            <div style={{ fontSize: 13, color: 'var(--midnight)' }}>
+                              <span style={{ fontWeight: 800 }}>Amount:</span> ₹{rev.changes.amount.from} → <span style={{ color: 'var(--emerald)', fontWeight: 800 }}>₹{rev.changes.amount.to}</span>
+                            </div>
+                          )}
+                          {isSChanged && (
+                            <div style={{ fontSize: 13, color: 'var(--midnight)' }}>
+                              <span style={{ fontWeight: 800 }}>Subject changed</span>
+                            </div>
+                          )}
+                          {isBChanged && (
+                            <div style={{ fontSize: 13, color: 'var(--midnight)' }}>
+                              <span style={{ fontWeight: 800 }}>Body updated</span>
+                              <DiffText oldText={(c?.from as any)?.body} newText={(c?.to as any)?.body} />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
           <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--slate)', letterSpacing: 1.5, marginBottom: 14 }}>APPROVAL TIMELINE</div>
           <div className="timeline">
             {steps.map((step, idx) => {
@@ -351,7 +546,7 @@ function RequestDetailModal({
               const isApproved = latest?.status === 'approved';
               const isReverted = latest?.status === 'reverted';
               const isRejected = latest?.status === 'rejected';
-              const isCurrent = req.status === 'pending' && req.current_step_order === step.step_order;
+              const isCurrent = req.status === 'pending' && req.current_step_id === step.id;
               const isLast = idx === steps.length - 1;
 
               const dotColor = isApproved ? 'var(--emerald)' : (isReverted || isRejected) ? 'var(--rose)' : isCurrent ? 'var(--gold)' : 'rgba(100,116,139,0.2)';
@@ -370,7 +565,14 @@ function RequestDetailModal({
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: hist.length ? 12 : 0 }}>
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                           <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--slate)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{step.role_label || 'Approver'}</span>
-                          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--midnight)' }}>{step.designations?.name ?? 'Approver'}</span>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--midnight)' }}>
+                            {step.profiles?.full_name ?? 'Approver'}
+                          </span>
+                          {step.profiles?.designations && (
+                             <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--slate)', marginTop: -2 }}>
+                               {Array.isArray(step.profiles.designations) ? step.profiles.designations[0]?.name : (step.profiles.designations as any)?.name}
+                             </span>
+                          )}
                         </div>
                         {isApproved && <span className="badge badge-emerald">APPROVED</span>}
                         {isReverted && <span className="badge badge-rose">REVERTED</span>}
@@ -494,7 +696,15 @@ function ActionCard({ req, onClick }: { req: ApprovalRequest; onClick: () => voi
             <div className="request-title" style={{ margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{req.title}</div>
             {req.cells?.name && <span className="badge badge-slate" style={{ fontSize: 9 }}>{req.cells.name}</span>}
           </div>
-          <div className="request-meta">From {req.requester_name ?? req.profiles?.full_name ?? 'Unknown'} · {req.template_name}</div>
+          <div className="request-meta">
+            From {req.requester_name ?? req.profiles?.full_name ?? 'Unknown'}
+            {req.profiles?.designations && (
+              <span style={{ color: 'var(--slate-light)', fontWeight: 600 }}> ({Array.isArray(req.profiles.designations) ? req.profiles.designations[0]?.name : (req.profiles.designations as any)?.name})</span>
+            )} · {req.template_name}
+          </div>
+          <div style={{ marginTop: 6, display: 'flex', gap: 6 }}>
+             <span className="badge" style={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.5, background: 'rgba(5, 150, 105, 0.1)', color: '#059669', border: '1px solid rgba(5, 150, 105, 0.2)', paddingLeft: 8, paddingRight: 8 }}>{req.current_step_role}</span>
+          </div>
           {req.has_amount && (
             <div style={{ fontSize: 13, fontWeight: 800, color: '#15803d', marginTop: 4 }}>₹ {req.amount?.toLocaleString('en-IN')}</div>
           )}
@@ -517,7 +727,12 @@ function SignedCard({ req, onClick }: { req: ApprovalRequest; onClick: () => voi
             <div className="request-title" style={{ margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{req.title}</div>
             {req.cells?.name && <span className="badge badge-slate" style={{ fontSize: 9 }}>{req.cells.name}</span>}
           </div>
-          <div className="request-meta">From {req.requester_name ?? req.profiles?.full_name ?? 'Unknown'} · <StatusBadge status={req.status} /></div>
+          <div className="request-meta">
+            From {req.requester_name ?? req.profiles?.full_name ?? 'Unknown'}
+            {req.profiles?.designations && (
+              <span style={{ color: 'var(--slate-light)', fontWeight: 600 }}> ({Array.isArray(req.profiles.designations) ? req.profiles.designations[0]?.name : (req.profiles.designations as any)?.name})</span>
+            )} · <StatusBadge status={req.status} />
+          </div>
           {req.has_amount && (
             <div style={{ fontSize: 13, fontWeight: 800, color: '#15803d', marginTop: 4 }}>₹ {req.amount?.toLocaleString('en-IN')}</div>
           )}
@@ -529,7 +744,18 @@ function SignedCard({ req, onClick }: { req: ApprovalRequest; onClick: () => voi
 }
 
 function MyRequestCard({ req, onClick }: { req: ApprovalRequest; onClick: () => void }) {
-  const steps = req.approval_templates?.template_steps?.sort((a, b) => a.step_order - b.step_order) || [];
+  const allSteps = req.approval_templates?.template_steps?.sort((a, b) => a.step_order - b.step_order) || [];
+  const requesterRank = (req.profiles?.designations as any)?.rank || 0;
+  const requesterDesignationId = (req.profiles as any)?.designation_id;
+  const amount = req.amount || 0;
+
+  const skipUntilOrder = allSteps.reduce((max, s) => {
+    const stepRank = (s.designations as any)?.rank ?? (s.profiles?.designations as any)?.rank ?? 0;
+    const isUnderOrSame = (stepRank > 0 && stepRank <= requesterRank) || (s.designation_id === requesterDesignationId);
+    return isUnderOrSame ? Math.max(max, s.step_order) : max;
+  }, -1);
+
+  const steps = allSteps.filter(s => s.step_order > skipUntilOrder && (!s.min_amount || amount >= s.min_amount));
   const latestAction = (req.request_approvals || [])
     .sort((a, b) => new Date(b.acted_at || 0).getTime() - new Date(a.acted_at || 0).getTime())[0];
 
@@ -554,20 +780,23 @@ function MyRequestCard({ req, onClick }: { req: ApprovalRequest; onClick: () => 
       setHoverStep(hoverStep === step.id ? null : step.id);
       return;
     }
-    setLoadingStep(step.id);
-    setHoverStep(step.id);
-    try {
-      const users = await getApproversByDesignation(step.designation_id, step.context, {
-        departmentId: req.profiles?.department_id,
-        instituteTypeId: req.profiles?.institute_type_id,
-        instituteId: req.profiles?.institute_id
-      });
-      setApproverNames(prev => ({ ...prev, [step.id]: users.map(u => u.full_name) }));
-    } catch (err) {
-      console.error(err);
-    } finally {
+    if (step.approver_id) {
+      if (step.profiles) {
+        setApproverNames(prev => ({ ...prev, [step.id]: [step.profiles!.full_name] }));
+      } else {
+        // Fallback if profiles not loaded yet
+        try {
+          const p = await getProfileById(step.approver_id);
+          if (p) setApproverNames(prev => ({ ...prev, [step.id]: [p.full_name] }));
+        } catch (err) { console.error(err); }
+      }
+      setHoverStep(step.id);
       setLoadingStep(null);
+      return;
     }
+
+    setHoverStep(step.id);
+    setLoadingStep(null);
   };
 
   return (
@@ -601,7 +830,7 @@ function MyRequestCard({ req, onClick }: { req: ApprovalRequest; onClick: () => 
         </div>
       )}
 
-      {req.status === 'approved' && (
+      {req.status === 'approved' && (req.request_approvals?.length ?? 0) >= steps.length && (
         <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ padding: '4px 8px', borderRadius: 6, background: 'rgba(16,185,129,0.1)', color: 'var(--emerald)', fontSize: 10, fontWeight: 800 }}>✓ FULLY SIGNED</div>
         </div>
@@ -611,6 +840,7 @@ function MyRequestCard({ req, onClick }: { req: ApprovalRequest; onClick: () => 
         <div className="chain-row" style={{ flexWrap: 'wrap', rowGap: 8 }}>
           {steps.map((s, i) => {
             const done = (req.request_approvals || []).some(a => a.step_order === s.step_order && a.status === 'approved');
+            const profDesignation = Array.isArray(s.profiles?.designations) ? s.profiles.designations[0]?.name : (s.profiles?.designations as any)?.name;
             return (
               <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 4, position: 'relative' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 0, overflow: 'hidden', borderRadius: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
@@ -624,7 +854,12 @@ function MyRequestCard({ req, onClick }: { req: ApprovalRequest; onClick: () => 
                   }}>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <span style={{ fontSize: 7, fontWeight: 900, color: done ? 'rgba(255,255,255,0.7)' : 'var(--slate)', textTransform: 'uppercase', letterSpacing: 0.3, lineHeight: 1 }}>{s.role_label || 'Approve'}</span>
-                      <span style={{ lineHeight: 1.2 }}>{s.designations?.name ?? 'Approver'}</span>
+                        <div style={{ fontWeight: 800 }}>
+                          {s.approver_id && s.profiles ? s.profiles.full_name : 'Approver'}
+                        </div>
+                        {profDesignation && (
+                          <div style={{ fontSize: 8, fontWeight: 600, opacity: done ? 0.7 : 0.6, marginTop: -1 }}>{profDesignation}</div>
+                        )}
                     </div>
                   </span>
                   <button 
@@ -725,19 +960,16 @@ export default function DashboardPage() {
   const loadAll = useCallback(async () => {
     setLoadingData(true);
     try {
-      const fetchers: Promise<any>[] = [getRequestsByRequester()];
-      if (isApprover) {
-        fetchers.push(getPendingApprovals());
-        fetchers.push(getApprovalHistory());
-      }
+      const fetchers: Promise<any>[] = [
+        getRequestsByRequester(),
+        getPendingApprovals(),
+        getApprovalHistory()
+      ];
       
       const results = await Promise.all(fetchers);
       setMyReqs(results[0]);
-      
-      if (isApprover) {
-        setPending(results[1]);
-        setSigned(results[2]);
-      }
+      setPending(results[1]);
+      setSigned(results[2]);
     } finally { setLoadingData(false); }
   }, [isApprover]);
 
@@ -824,25 +1056,21 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-7">
-        {isApprover && (
-          <div className="content-col">
-            {/* Action Required */}
-            <Section title="Action Required" icon={<AlertCircle size={16} />} color="var(--rose)">
-              {loadingData ? <div style={{ height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div className="loading-spinner" /></div>
-                : pending.length === 0 ? <EmptyState message="No pending approvals — you're all caught up!" icon={<CheckCircle2 size={28} color="var(--slate-light)" />} />
-                : <div className="request-list">{pending.map(r => <ActionCard key={r.id} req={r} onClick={() => setSelectedAction(r)} />)}</div>}
-            </Section>
+        <div className="content-col">
+          {/* Action Required */}
+          <Section title="Action Required" icon={<AlertCircle size={16} />} color="var(--rose)">
+            {loadingData ? <div style={{ height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div className="loading-spinner" /></div>
+              : pending.length === 0 ? <EmptyState message="No pending approvals — you're all caught up!" icon={<CheckCircle2 size={28} color="var(--slate-light)" />} />
+              : <div className="request-list">{pending.map(r => <ActionCard key={r.id} req={r} onClick={() => setSelectedAction(r)} />)}</div>}
+          </Section>
 
-
-
-            {/* Signed by Me */}
-            <Section title="Signed by Me" icon={<CheckSquare size={16} />} color="var(--accent)">
-              {loadingData ? <div style={{ height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div className="loading-spinner" /></div>
-                : signed.length === 0 ? <EmptyState message="You haven't signed any letters yet." icon={<FileSignature size={28} color="var(--slate-light)" />} />
-                : <div className="request-list">{signed.map(r => <SignedCard key={r.id} req={r} onClick={() => setSelectedDetail(r)} />)}</div>}
-            </Section>
-          </div>
-        )}
+          {/* Signed by Me */}
+          <Section title="Signed by Me" icon={<CheckSquare size={16} />} color="var(--accent)">
+            {loadingData ? <div style={{ height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div className="loading-spinner" /></div>
+              : signed.length === 0 ? <EmptyState message="You haven't signed any letters yet." icon={<FileSignature size={28} color="var(--slate-light)" />} />
+              : <div className="request-list">{signed.map(r => <SignedCard key={r.id} req={r} onClick={() => setSelectedDetail(r)} />)}</div>}
+          </Section>
+        </div>
 
         {/* Right column: My Requests */}
         <div>

@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ShieldCheck, LayoutDashboard, Files, User, LogOut, X, BarChart3, Building } from 'lucide-react';
+import { ShieldCheck, LayoutDashboard, Files, User, LogOut, X, BarChart3, Building, Receipt } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { signOut } from '@/lib/api';
 import { useRouter } from 'next/navigation';
@@ -60,6 +60,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           {[
             { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard', color: 'var(--accent)' },
             { icon: Files, label: 'Letter Templates', href: '/templates', color: 'var(--emerald)' },
+            { icon: Receipt, label: 'Settlements', href: '/settlements', color: 'var(--accent2)' },
             { icon: User, label: 'My Profile', href: '/profile', color: 'var(--gold)' },
           ].map(({ icon: Icon, label, href, color }) => (
             <Link

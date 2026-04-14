@@ -2,8 +2,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Files, Search, Plus, FileText, ArrowRight, Trash2, PlusCircle, X, CheckCircle2 } from 'lucide-react';
 import AppShell from '@/components/AppShell';
-import { getTemplates, getDesignations, proposeTemplate, createRequest, getCells, getPersonTypes } from '@/lib/api';
-import { ApprovalTemplate, Designation, Cell, PersonType } from '@/lib/types';
+import { getTemplates, getDesignations, proposeTemplate, createRequest, getCells, getPersonTypes, getProfiles } from '@/lib/api';
+import { ApprovalTemplate, Designation, Cell, PersonType, UserProfile } from '@/lib/types';
 import { useAuth } from '@/lib/auth-context';
 import BifurcationTable, { BifurcationItem } from '@/components/BifurcationTable';
 import Select from 'react-select';
@@ -88,7 +88,28 @@ function ComposeModal({ template, onClose, onDone }: { template: ApprovalTemplat
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const steps = template.template_steps?.sort((a, b) => a.step_order - b.step_order) || [];
+  const myRank = (profile?.designations as any)?.rank || 0;
+  const currentAmount = hasAmount ? parseFloat(amount) || 0 : 0;
+  const allSteps = (template.template_steps || []).sort((a: any, b: any) => a.step_order - b.step_order);
+  const myDesignationId = (profile as any)?.designation_id;
+
+  const skipUntilOrder = allSteps.reduce((max: number, s: any) => {
+    const stepRank = (s.designations as any)?.rank ?? (s.profiles?.designations as any)?.rank ?? 0;
+    const isUnderOrSame = (stepRank > 0 && stepRank <= myRank) || (s.designation_id === myDesignationId);
+    return isUnderOrSame ? Math.max(max, s.step_order) : max;
+  }, -1);
+
+  const firstActionableStep = allSteps.find((s: any) => {
+    const isAfterSkipped = s.step_order > skipUntilOrder;
+    const amountOk = !s.min_amount || currentAmount >= s.min_amount;
+    return isAfterSkipped && amountOk;
+  });
+
+  const steps = allSteps.filter(s => {
+    const isAfterSkipped = s.step_order > skipUntilOrder;
+    const amountOk = !s.min_amount || currentAmount >= s.min_amount;
+    return isAfterSkipped && amountOk;
+  });
 
   const filteredCells = cells.filter(c => 
     c.name.toLowerCase().includes(cellSearch.toLowerCase())
@@ -140,7 +161,7 @@ function ComposeModal({ template, onClose, onDone }: { template: ApprovalTemplat
                   <div style={{ display: 'flex', flexDirection: 'column', padding: '4px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
                     <span style={{ fontSize: 8, fontWeight: 900, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{s.role_label || 'Approver'}</span>
                     <span style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>
-                      {s.designations?.name ?? 'Approver'}
+                      {s.approver_id && s.profiles ? (Array.isArray(s.profiles.designations) ? s.profiles.designations[0]?.name : s.profiles.designations?.name) ?? s.profiles.full_name : 'Approver'}
                     </span>
                   </div>
                   {i < steps.length - 1 && <ArrowRight size={10} color="rgba(255,255,255,0.4)" />}
@@ -341,12 +362,13 @@ function ComposeModal({ template, onClose, onDone }: { template: ApprovalTemplat
 function ProposeModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
-  const [steps, setSteps] = useState<{ designation_id: string; context: string; role_label: string }[]>([]);
+  const [steps, setSteps] = useState<{ approver_id: string; role_label: string }[]>([]);
   const [requesterRoleLabel, setRequesterRoleLabel] = useState('Prepared by');
   const [allowsAmount, setAllowsAmount] = useState(false);
   const [maxAmount, setMaxAmount] = useState('');
   const [designations, setDesignations] = useState<Designation[]>([]);
   const [personTypes, setPersonTypes] = useState<PersonType[]>([]);
+  const [allProfiles, setAllProfiles] = useState<UserProfile[]>([]);
   const [selectedPersonTypes, setSelectedPersonTypes] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -354,23 +376,33 @@ function ProposeModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
   useEffect(() => { 
     getDesignations().then(setDesignations); 
     getPersonTypes().then(setPersonTypes);
+    getProfiles().then(setAllProfiles);
   }, []);
 
-  const addStep = () => setSteps(s => [...s, { designation_id: '', context: 'departmental', role_label: '' }]);
+  const addStep = (index?: number) => {
+    const newStep = { approver_id: '', role_label: '' };
+    if (index !== undefined) {
+      const newSteps = [...steps];
+      newSteps.splice(index, 0, newStep);
+      setSteps(newSteps);
+    } else {
+      setSteps(s => [...s, newStep]);
+    }
+  };
   const removeStep = (i: number) => setSteps(s => s.filter((_, idx) => idx !== i));
   const updateStep = (i: number, field: string, value: string) =>
     setSteps(s => s.map((st, idx) => idx === i ? { ...st, [field]: value } : st));
 
   const handleSubmit = async () => {
     if (!name.trim()) { setError('Template name is required.'); return; }
-    if (steps.length === 0 || steps.some(s => !s.designation_id)) { setError('All steps must have a designation.'); return; }
+    if (steps.length === 0 || steps.some(s => !s.approver_id)) { setError('All steps must have a specific approver assigned.'); return; }
     setError(''); setLoading(true);
     try {
       const parsedMax = parseFloat(maxAmount);
       await proposeTemplate(
         name, 
         desc, 
-        steps, 
+        steps.map(s => ({ approver_id: s.approver_id, role_label: s.role_label })), 
         allowsAmount, 
         selectedPersonTypes.map(p => p.value),
         allowsAmount && !isNaN(parsedMax) ? parsedMax : undefined,
@@ -456,61 +488,92 @@ function ProposeModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--midnight)' }}>Approval Steps</span>
-            <button className="btn btn-outline btn-sm" onClick={addStep} style={{ gap: 6 }}>
+            <button className="btn btn-outline btn-sm" onClick={() => addStep()} style={{ gap: 6 }}>
               <PlusCircle size={14} /> Add Step
             </button>
           </div>
 
-          {steps.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '20px', color: 'var(--slate)', fontSize: 13, background: 'var(--surface)', borderRadius: 12, border: '1px dashed var(--border)' }}>
-              No steps yet. Add at least one step.
-            </div>
-          )}
-
           {steps.map((step, i) => (
-            <div key={i} style={{ marginBottom: 14, background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--midnight)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 }}>{i + 1}</div>
-                <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: 'var(--midnight)' }}>Approval Step ${i + 1}</div>
-                <button onClick={() => removeStep(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--rose)', padding: 4 }}>
-                  <Trash2 size={16} />
-                </button>
-              </div>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr', gap: 10, marginBottom: 10 }}>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Designation</label>
-                  <select className="field-input" style={{ marginBottom: 0 }} value={step.designation_id} onChange={e => updateStep(i, 'designation_id', e.target.value)}>
-                    <option value="">Select Designation</option>
-                    {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
+            <div key={i}>
+              {/* Insert Before Button */}
+              {i > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'center', margin: '-8px 0 12px' }}>
+                  <button 
+                    onClick={() => addStep(i)}
+                    style={{ 
+                      padding: '4px 12px', background: '#fff', border: '1px dashed var(--border)', borderRadius: 20, 
+                      fontSize: 10, fontWeight: 800, color: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                    }}
+                  >
+                    <Plus size={10} /> Insert Step Here
+                  </button>
                 </div>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Scope</label>
-                  <select className="field-input" style={{ marginBottom: 0 }} value={step.context} onChange={e => updateStep(i, 'context', e.target.value)}>
-                    <option value="departmental">Departmental</option>
-                    <option value="institute">Institute-level</option>
-                    <option value="global">Global</option>
-                  </select>
+              )}
+
+              <div style={{ marginBottom: 14, background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: '16px', position: 'relative' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--midnight)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 }}>{i + 1}</div>
+                  <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: 'var(--midnight)' }}>Approval Step {i + 1}</div>
+                  <button onClick={() => removeStep(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--rose)', padding: 4 }}>
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Select Signatory *</label>
+                    <Select
+                      options={allProfiles.map(p => ({ 
+                        value: p.id, 
+                        label: `${p.full_name} (${p.designations?.name ?? 'No Designation'})`,
+                        email: p.email 
+                      }))}
+                      value={allProfiles.find(p => p.id === step.approver_id) ? { 
+                        value: step.approver_id, 
+                        label: allProfiles.find(p => p.id === step.approver_id)?.full_name + ' (' + (allProfiles.find(p => p.id === step.approver_id)?.designations?.name ?? 'No Designation') + ')',
+                        email: allProfiles.find(p => p.id === step.approver_id)?.email
+                      } : null}
+                      onChange={(val: any) => updateStep(i, 'approver_id', val?.value || '')}
+                      styles={selectStyles}
+                      placeholder="Search name or email..."
+                      isClearable
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Role Label</label>
+                    <select 
+                      className="field-input" 
+                      value={step.role_label} 
+                      onChange={e => updateStep(i, 'role_label', e.target.value)} 
+                      style={{ marginBottom: 0 }}
+                    >
+                      <option value="">Default (Auto-select)</option>
+                      <option value="Prepared by">Prepared by</option>
+                      <option value="Verified by">Verified by</option>
+                      <option value="Forwarded by">Forwarded by</option>
+                      <option value="Recommended by">Recommended by</option>
+                      <option value="Approved by">Approved by</option>
+                    </select>
+                  </div>
                 </div>
               </div>
-              
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Role Label</label>
-                <select 
-                  className="field-input" 
-                  value={step.role_label} 
-                  onChange={e => updateStep(i, 'role_label', e.target.value)} 
-                  style={{ marginBottom: 0 }}
-                >
-                  <option value="">Default (Designation Name)</option>
-                  <option value="Prepared by">Prepared by</option>
-                  <option value="Verified by">Verified by</option>
-                  <option value="Forwarded by">Forwarded by</option>
-                  <option value="Recommended by">Recommended by</option>
-                  <option value="Approved by">Approved by</option>
-                </select>
-              </div>
+
+              {/* Insert After Button (only for last step) */}
+              {i === steps.length - 1 && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: -8, marginBottom: 20 }}>
+                  <button 
+                    onClick={() => addStep()}
+                    style={{ 
+                      padding: '4px 12px', background: '#fff', border: '1px dashed var(--border)', borderRadius: 20, 
+                      fontSize: 10, fontWeight: 800, color: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                    }}
+                  >
+                    <Plus size={10} /> Add Next Step
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -551,7 +614,7 @@ function TemplateCard({ template, onClick }: { template: ApprovalTemplate; onCli
               <div style={{ display: 'flex', flexDirection: 'column', background: 'rgba(10,15,30,0.05)', padding: '4px 10px', borderRadius: 8, border: '1px solid rgba(10,15,30,0.08)' }}>
                  <span style={{ fontSize: 8, fontWeight: 800, color: 'var(--slate)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{s.role_label || 'Approver'}</span>
                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--midnight)' }}>
-                   {s.designations?.name ?? 'Approver'}
+                    {s.profiles ? (Array.isArray(s.profiles.designations) ? s.profiles.designations[0]?.name : (s.profiles.designations as any)?.name) ?? s.profiles.full_name : 'Approver'}
                  </span>
               </div>
               {i < steps.length - 1 && <ArrowRight size={10} color="var(--slate-light)" />}

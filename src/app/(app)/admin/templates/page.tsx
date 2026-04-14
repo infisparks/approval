@@ -1,17 +1,15 @@
 'use client';
 export const dynamic = 'force-dynamic';
 import { useState, useEffect } from 'react';
+import { Reorder, useDragControls } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import AppShell from '@/components/AppShell';
-import { 
-  getAllTemplatesAdmin, updateTemplateActiveStatus, updateTemplate, 
-  approveTemplate, rejectTemplate, getDesignations, getPersonTypes
-} from '@/lib/api';
-import { ApprovalTemplate, Designation, PersonType } from '@/lib/types';
+import { getAllTemplatesAdmin, updateTemplateActiveStatus, updateTemplate, approveTemplate, rejectTemplate, getDesignations, getPersonTypes, getProfiles, duplicateTemplate } from '@/lib/api';
+import { ApprovalTemplate, Designation, PersonType, UserProfile } from '@/lib/types';
 import Select from 'react-select';
 import makeAnimated from 'react-select/animated';
-import { FileCog, ArrowRight, Trash2, PlusCircle, CheckCircle2, Edit2, ShieldAlert, Search, X, Filter } from 'lucide-react';
+import { FileCog, ArrowRight, Trash2, PlusCircle, CheckCircle2, Edit2, ShieldAlert, Search, X, Filter, Plus, Copy, GripVertical } from 'lucide-react';
 
 const animatedComponents = makeAnimated();
 
@@ -57,11 +55,158 @@ const selectStyles = {
   })
 };
 
+function StepItem({ step, i, steps, designations, allProfiles, updateStep, removeStep, addStep, propagateValue }: any) {
+  const dragControls = useDragControls();
+
+  return (
+    <Reorder.Item value={step} id={step.id} dragListener={false} dragControls={dragControls} style={{ listStyle: 'none' }}>
+      {i > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'center', margin: '-8px 0 12px' }}>
+          <button 
+            onClick={() => addStep(i)}
+            style={{ 
+              padding: '4px 12px', background: '#fff', border: '1px dashed var(--border)', borderRadius: 20, 
+              fontSize: 10, fontWeight: 800, color: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+              boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+            }}
+          >
+            <Plus size={10} /> Insert Step Here
+          </button>
+        </div>
+      )}
+
+      <div style={{ marginBottom: 14, background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <div 
+            onPointerDown={(e) => dragControls.start(e)}
+            style={{ 
+              cursor: 'grab', 
+              padding: '4px', 
+              color: 'var(--slate-light)',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+          >
+            <GripVertical size={16} />
+          </div>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--midnight)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800 }}>{i + 1}</div>
+          <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: 'var(--midnight)' }}>Approval Step {i + 1}</div>
+          <button onClick={() => removeStep(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--rose)', padding: 4 }}>
+            <Trash2 size={16} />
+          </button>
+        </div>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.8fr 0.6fr', gap: 12 }}>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', textTransform: 'uppercase' }}>Signatory *</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                 <button 
+                   onClick={() => { updateStep(i, 'approver_id', ''); updateStep(i, 'designation_id', ''); }}
+                   className={`text-[9px] font-bold px-2 py-0.5 rounded ${!step.designation_id ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-slate-400'}`}
+                 >Individual</button>
+                 <button 
+                   onClick={() => { updateStep(i, 'approver_id', ''); updateStep(i, 'designation_id', designations[0]?.id || ''); }}
+                   className={`text-[9px] font-bold px-2 py-0.5 rounded ${step.designation_id ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-slate-400'}`}
+                 >Role</button>
+              </div>
+            </div>
+            
+            {step.designation_id ? (
+              <select 
+                className="field-input" 
+                value={step.designation_id} 
+                onChange={e => updateStep(i, 'designation_id', e.target.value)}
+                style={{ fontSize: 13, fontWeight: 600 }}
+              >
+                {designations.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            ) : (
+              <Select
+                options={allProfiles.map((p: any) => ({ 
+                  value: p.id, 
+                  label: `${p.full_name} (${p.designations?.name ?? 'No Role'})`,
+                }))}
+                value={allProfiles.find((p: any) => p.id === step.approver_id) ? { 
+                  value: step.approver_id, 
+                  label: allProfiles.find((p: any) => p.id === step.approver_id)?.full_name 
+                } : null}
+                onChange={(val: any) => updateStep(i, 'approver_id', val?.value || '')}
+                styles={selectStyles}
+                placeholder="Search user..."
+                isClearable
+              />
+            )}
+          </div>
+          <div>
+            <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Role Label</label>
+            <select 
+              className="field-input" 
+              value={step.role_label} 
+              onChange={e => updateStep(i, 'role_label', e.target.value)} 
+            >
+              <option value="">Auto</option>
+              <option value="Verified by">Verified by</option>
+              <option value="Forwarded by">Forwarded by</option>
+              <option value="Recommended by">Recommended by</option>
+              <option value="Approved by">Approved by</option>
+              <option value="Sanctioned by">Sanctioned by</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Trigger Amt</label>
+            <div style={{ position: 'relative' }}>
+              <input 
+                type="number"
+                className="field-input" 
+                placeholder="0"
+                value={step.min_amount} 
+                onChange={e => updateStep(i, 'min_amount', e.target.value)} 
+                style={{ paddingRight: 40 }}
+              />
+              <div style={{ position: 'absolute', right: 2, top: 2, bottom: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <button 
+                  title="Apply to all above" 
+                  onClick={() => propagateValue(i, step.min_amount, 'up')}
+                  style={{ flex: 1, border: 'none', background: 'rgba(59,130,246,0.1)', color: 'var(--accent)', borderRadius: 4, cursor: 'pointer', padding: '0 4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <ArrowRight size={10} style={{ transform: 'rotate(-90deg)' }} />
+                </button>
+                <button 
+                  title="Apply to all below" 
+                  onClick={() => propagateValue(i, step.min_amount, 'down')}
+                  style={{ flex: 1, border: 'none', background: 'rgba(16,185,129,0.1)', color: 'var(--emerald)', borderRadius: 4, cursor: 'pointer', padding: '0 4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <ArrowRight size={10} style={{ transform: 'rotate(90deg)' }} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {i === steps.length - 1 && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12, marginBottom: 0 }}>
+            <button onClick={() => addStep()} className="btn btn-outline btn-sm" style={{ padding: '4px 16px', borderRadius: 20, fontSize: 11, background: '#fff' }}>
+              <Plus size={12} /> Add Next Step
+            </button>
+          </div>
+        )}
+      </div>
+    </Reorder.Item>
+  );
+}
+
 function EditTemplateModal({ temp, onClose, onDone }: { temp: ApprovalTemplate; onClose: () => void; onDone: () => void }) {
   const [name, setName] = useState(temp.name);
   const [desc, setDesc] = useState(temp.description || '');
-  const [steps, setSteps] = useState<{ designation_id: string; context: string; role_label: string }[]>(
-    (temp.template_steps || []).map(s => ({ designation_id: s.designation_id, context: s.context, role_label: s.role_label || '' }))
+  const [steps, setSteps] = useState<{ approver_id: string; designation_id: string; role_label: string; id: string; min_amount?: number }[]>(
+    (temp.template_steps || []).sort((a,b) => a.step_order - b.step_order).map((s, idx) => ({ 
+      approver_id: s.approver_id || '',
+      designation_id: s.designation_id || '',
+      role_label: s.role_label || '',
+      min_amount: s.min_amount || 0,
+      id: s.id || `step-${idx}-${Date.now()}`
+    }))
   );
   const [requesterRoleLabel, setRequesterRoleLabel] = useState(temp.requester_role_label || 'Prepared by');
   const [allowsAmount, setAllowsAmount] = useState(temp.allows_amount);
@@ -69,7 +214,7 @@ function EditTemplateModal({ temp, onClose, onDone }: { temp: ApprovalTemplate; 
   
   const [designations, setDesignations] = useState<Designation[]>([]);
   const [personTypes, setPersonTypes] = useState<PersonType[]>([]);
-  
+  const [allProfiles, setAllProfiles] = useState<UserProfile[]>([]);
   const [selectedPersonTypes, setSelectedPersonTypes] = useState<any[]>([]);
   
   const [loading, setLoading] = useState(false);
@@ -77,9 +222,9 @@ function EditTemplateModal({ temp, onClose, onDone }: { temp: ApprovalTemplate; 
 
   useEffect(() => {
     getDesignations().then(setDesignations);
+    getProfiles().then(setAllProfiles);
     getPersonTypes().then(pts => {
       setPersonTypes(pts);
-      // Preselect
       if (temp.visible_to_person_types) {
         const selected = pts.filter(p => temp.visible_to_person_types!.includes(p.id))
                          .map(p => ({ value: p.id, label: p.name }));
@@ -88,14 +233,44 @@ function EditTemplateModal({ temp, onClose, onDone }: { temp: ApprovalTemplate; 
     });
   }, [temp]);
 
-  const addStep = () => setSteps(s => [...s, { designation_id: '', context: 'departmental', role_label: '' }]);
+  const addStep = (index?: number) => {
+    const newStep = { approver_id: '', designation_id: '', role_label: '', min_amount: 0, id: `step-${Date.now()}-${Math.random()}` };
+    if (index !== undefined) {
+      const newSteps = [...steps];
+      newSteps.splice(index, 0, newStep);
+      setSteps(newSteps);
+    } else {
+      setSteps(s => [...s, newStep]);
+    }
+  };
   const removeStep = (i: number) => setSteps(s => s.filter((_, idx) => idx !== i));
-  const updateStep = (i: number, field: string, value: string) =>
-    setSteps(s => s.map((st, idx) => idx === i ? { ...st, [field]: value } : st));
+  const updateStep = (i: number, field: string, value: string) => {
+    setSteps(s => s.map((st, idx) => {
+      if (idx === i) {
+        const updated = { ...st, [field]: value };
+        // If setting approver, clear designation and vice versa
+        if (field === 'approver_id' && value) updated.designation_id = '';
+        if (field === 'designation_id' && value) updated.approver_id = '';
+        return updated;
+      }
+      return st;
+    }));
+  };
+
+  const propagateValue = (i: number, val: any, dir: 'up' | 'down') => {
+    setSteps(s => s.map((st, idx) => {
+      if (dir === 'up' && idx <= i) return { ...st, min_amount: Number(val) || 0 };
+      if (dir === 'down' && idx >= i) return { ...st, min_amount: Number(val) || 0 };
+      return st;
+    }));
+  };
 
   const handleSave = async () => {
     if (!name.trim()) { setError('Template name is required.'); return; }
-    if (steps.length === 0 || steps.some(s => !s.designation_id)) { setError('All steps must have a designation.'); return; }
+    if (steps.length === 0 || steps.some(s => !s.approver_id && !s.designation_id)) { 
+      setError('All steps must have either an approver or a designation assigned.'); 
+      return; 
+    }
     setError(''); setLoading(true);
     try {
       const parsedMax = parseFloat(maxAmount.toString());
@@ -103,10 +278,15 @@ function EditTemplateModal({ temp, onClose, onDone }: { temp: ApprovalTemplate; 
         temp.id, 
         name, 
         desc, 
-        steps, 
+        steps.map(s => ({ 
+          approver_id: s.approver_id || undefined, 
+          designation_id: s.designation_id || undefined,
+          role_label: s.role_label,
+          min_amount: s.min_amount || 0
+        })), 
         allowsAmount, 
         selectedPersonTypes.map(p => p.value),
-        allowsAmount && !isNaN(parsedMax) ? parsedMax : undefined,
+        !isNaN(parsedMax) ? parsedMax : undefined,
         requesterRoleLabel
       );
       onDone(); onClose();
@@ -190,57 +370,27 @@ function EditTemplateModal({ temp, onClose, onDone }: { temp: ApprovalTemplate; 
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, marginTop: 20 }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--midnight)' }}>Approval Steps</span>
-            <button className="btn btn-outline btn-sm" onClick={addStep} style={{ gap: 6 }}>
+            <button className="btn btn-outline btn-sm" onClick={() => addStep()} style={{ gap: 6 }}>
               <PlusCircle size={14} /> Add Step
             </button>
           </div>
 
-          {steps.map((step, i) => (
-            <div key={i} style={{ marginBottom: 14, background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--midnight)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 }}>{i + 1}</div>
-                <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: 'var(--midnight)' }}>Approval Step ${i + 1}</div>
-                <button onClick={() => removeStep(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--rose)', padding: 4 }}>
-                  <Trash2 size={16} />
-                </button>
-              </div>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr', gap: 10, marginBottom: 10 }}>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Designation</label>
-                  <select className="field-input" style={{ marginBottom: 0 }} value={step.designation_id} onChange={e => updateStep(i, 'designation_id', e.target.value)}>
-                    <option value="">Select Designation</option>
-                    {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Scope</label>
-                  <select className="field-input" style={{ marginBottom: 0 }} value={step.context} onChange={e => updateStep(i, 'context', e.target.value)}>
-                    <option value="departmental">Departmental</option>
-                    <option value="institute">Institute-level</option>
-                    <option value="global">Global</option>
-                  </select>
-                </div>
-              </div>
-              
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Role Label</label>
-                <select 
-                  className="field-input" 
-                  value={step.role_label} 
-                  onChange={e => updateStep(i, 'role_label', e.target.value)} 
-                  style={{ marginBottom: 0 }}
-                >
-                  <option value="">Default (Designation Name)</option>
-                  <option value="Prepared by">Prepared by</option>
-                  <option value="Verified by">Verified by</option>
-                  <option value="Forwarded by">Forwarded by</option>
-                  <option value="Recommended by">Recommended by</option>
-                  <option value="Approved by">Approved by</option>
-                </select>
-              </div>
-            </div>
-          ))}
+          <Reorder.Group axis="y" values={steps} onReorder={setSteps} style={{ padding: 0 }}>
+            {steps.map((step, i) => (
+              <StepItem 
+                key={step.id}
+                step={step}
+                i={i}
+                steps={steps}
+                designations={designations}
+                allProfiles={allProfiles}
+                updateStep={updateStep}
+                removeStep={removeStep}
+                addStep={addStep}
+                propagateValue={propagateValue}
+              />
+            ))}
+          </Reorder.Group>
         </div>
         <div className="modal-footer">
           <button className="btn btn-outline" style={{ flex: 1 }} onClick={onClose} disabled={loading}>Cancel</button>
@@ -261,8 +411,11 @@ export default function AdminTemplatesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterVisibility, setFilterVisibility] = useState<'all' | 'public' | 'restricted'>('all');
   const [filterAmount, setFilterAmount] = useState<'all' | 'with_amount' | 'without_amount'>('all');
+  const [personTypes, setPersonTypes] = useState<PersonType[]>([]);
+  const [filterPersonType, setFilterPersonType] = useState<string>('all');
   
   const [editing, setEditing] = useState<ApprovalTemplate | null>(null);
+  const [isDuplicating, setIsDuplicating] = useState<string | null>(null);
 
   useEffect(() => {
     if (profile && !profile.is_admin) {
@@ -281,6 +434,10 @@ export default function AdminTemplatesPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    getPersonTypes().then(setPersonTypes).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (profile && profile.is_admin) {
@@ -305,6 +462,18 @@ export default function AdminTemplatesPage() {
       } catch (e: any) {
         alert(e.message);
       }
+    }
+  };
+  const handleDuplicate = async (t: ApprovalTemplate) => {
+    if (!confirm(`Are you sure you want to duplicate "${t.name}"?`)) return;
+    setIsDuplicating(t.id);
+    try {
+      await duplicateTemplate(t);
+      load();
+    } catch (err: any) {
+      alert(err.message || 'Failed to duplicate template');
+    } finally {
+      setIsDuplicating(null);
     }
   };
 
@@ -334,6 +503,11 @@ export default function AdminTemplatesPage() {
     // 3. Amount filter
     if (filterAmount === 'with_amount' && !t.allows_amount) return false;
     if (filterAmount === 'without_amount' && t.allows_amount) return false;
+
+    // 4. Staff Category filter
+    if (filterPersonType !== 'all') {
+      if (!t.visible_to_person_types || !t.visible_to_person_types.includes(filterPersonType)) return false;
+    }
 
     return true;
   });
@@ -392,8 +566,21 @@ export default function AdminTemplatesPage() {
             >With Budget</button>
             <button 
               onClick={() => setFilterAmount('without_amount')}
-              style={{ padding: '6px 12px', fontSize: 13, fontWeight: 600, borderRadius: 6, border: 'none', cursor: 'pointer', background: filterAmount === 'without_amount' ? 'rgba(245, 158, 11, 0.1)' : 'transparent', color: filterAmount === 'without_amount' ? 'var(--gold)' : 'var(--slate)' }}
-            >Without Budget</button>
+              style={{ padding: '6px 12px', fontSize: 13, fontWeight: 600, borderRadius: 6, border: 'none', cursor: 'pointer', background: filterAmount === 'without_amount' ? 'rgba(244, 63, 94, 0.1)' : 'transparent', color: filterAmount === 'without_amount' ? 'var(--rose)' : 'var(--slate)' }}
+            >Standard Only</button>
+          </div>
+
+          {/* Person Type Filter */}
+          <div style={{ minWidth: 200 }}>
+            <Select
+              placeholder="Filter by Category..."
+              options={[
+                { value: 'all', label: 'All Categories' },
+                ...personTypes.map(p => ({ value: p.id, label: p.name }))
+              ]}
+              styles={selectStyles}
+              onChange={(opt: any) => setFilterPersonType(opt?.value || 'all')}
+            />
           </div>
         </div>
       </div>
@@ -429,7 +616,7 @@ export default function AdminTemplatesPage() {
                               <div style={{ display: 'flex', flexDirection: 'column', background: 'rgba(10,15,30,0.06)', padding: '2px 8px', borderRadius: 6 }}>
                                 <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--slate)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{s.role_label || 'Approver'}</span>
                                 <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--midnight)' }}>
-                                  {s.designations?.name ?? 'Approver'}
+                                  {s.profiles ? s.profiles.full_name : (s.designations?.name ?? 'Approver')}
                                 </span>
                               </div>
                               {i < arr.length - 1 && <ArrowRight size={10} color="var(--slate-light)" />}
@@ -437,8 +624,17 @@ export default function AdminTemplatesPage() {
                           ))}
                         </div>
 
-                        <div style={{ fontSize: 12, color: 'var(--slate)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                          {t.visible_to_person_types?.length ? <span style={{ color: 'var(--rose)', fontWeight: 600 }}>Restricted</span> : 'Public'}
+                        <div style={{ fontSize: 12, color: 'var(--slate)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                          {t.visible_to_person_types?.length ? (
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <span style={{ color: 'var(--rose)', fontWeight: 600 }}>Visible To:</span>
+                              {t.visible_to_person_types.map(ptId => {
+                                const pt = personTypes.find(p => p.id === ptId);
+                                return pt ? <span key={ptId} className="badge badge-rose" style={{ fontSize: 10 }}>{pt.name}</span> : null;
+                              })}
+                            </div>
+                          ) : <span className="badge badge-slate" style={{ fontSize: 10 }}>Public</span>}
+                          
                           {t.allows_amount && (
                             <>
                               <span style={{ color: 'var(--slate-light)' }}>•</span>
@@ -475,6 +671,9 @@ export default function AdminTemplatesPage() {
                         <button className="btn btn-emerald btn-sm" onClick={() => doApprove(t)}>Approve</button>
                       </div>
                     )}
+                    <button className="btn btn-outline btn-sm" onClick={() => handleDuplicate(t)} disabled={isDuplicating === t.id} style={{ marginRight: 6 }}>
+                      <Copy size={14} /> Duplicate
+                    </button>
                     <button className="btn btn-outline btn-sm" onClick={() => setEditing(t)}>
                       <Edit2 size={14} /> Edit
                     </button>

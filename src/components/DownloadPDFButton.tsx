@@ -62,7 +62,19 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
       container.style.color = '#1e293b';
       container.style.fontFamily = "'Inter', system-ui, -apple-system, sans-serif";
 
-      const steps = request.approval_templates?.template_steps?.sort((a, b) => a.step_order - b.step_order) || [];
+      const allSteps = request.approval_templates?.template_steps?.sort((a, b) => a.step_order - b.step_order) || [];
+      const requesterRank = (request.profiles?.designations as any)?.rank || 0;
+      const requesterDesignationId = (request.profiles as any)?.designation_id;
+      const requestAmount = request.amount || 0;
+
+      const skipUntilOrder = allSteps.reduce((max, s) => {
+        const stepRank = (s.designations as any)?.rank ?? (s.profiles?.designations as any)?.rank ?? 0;
+        const isUnderOrSame = (stepRank > 0 && stepRank <= requesterRank) || (s.designation_id === requesterDesignationId);
+        return isUnderOrSame ? Math.max(max, s.step_order) : max;
+      }, -1);
+
+      const steps = allSteps.filter(s => s.step_order > skipUntilOrder && (!s.min_amount || requestAmount >= s.min_amount));
+
       const approvals = request.request_approvals?.sort((a, b) =>
         new Date(a.acted_at || 0).getTime() - new Date(b.acted_at || 0).getTime()
       ) || [];
@@ -254,8 +266,8 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
                     
                     signatories.push({
                       role: step.role_label || step.designations?.name || 'Signatory',
-                      name: latest?.profiles?.full_name || 'Await Decision',
-                      designation: latest?.profiles?.designations?.name || step.designations?.name || '',
+                      name: latest?.profiles?.full_name || (step.approver_id && step.profiles ? step.profiles.full_name : 'Await Decision'),
+                      designation: latest?.profiles?.designations?.name || step.profiles?.designations?.name || step.designations?.name || '',
                       signature: latest?.profiles?.signature,
                       status: latest?.status || 'PENDING',
                       date: latest?.acted_at,
