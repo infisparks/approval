@@ -637,7 +637,7 @@ export default function AdminDashboard() {
 }
 
 function InspectionModal({ req, onClose }: { req: ApprovalRequest; onClose: () => void }) {
-  const hasChanges = req.last_reverted_step_order !== undefined;
+  const hasChanges = req.last_reverted_step_id !== undefined;
 
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(10,15,30,0.7)', backdropFilter: 'blur(10px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, animation: 'fadeIn 0.3s ease' }} onClick={onClose}>

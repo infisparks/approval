@@ -79,6 +79,9 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
         new Date(a.acted_at || 0).getTime() - new Date(b.acted_at || 0).getTime()
       ) || [];
 
+      const currentStepObj = steps.find(s => s.id === request.current_step_id);
+      const currentStepOrder = currentStepObj?.step_order || 0;
+
       // Status Badge Component
       const getStatusBadge = (status: string) => {
         const s = status?.toLowerCase() || 'pending';
@@ -262,7 +265,7 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
                   steps.forEach(step => {
                     const hist = approvals.filter(a => a.step_order === step.step_order);
                     const latest = hist[hist.length - 1];
-                    if (!latest && step.step_order > request.current_step_order) return;
+                    if (!latest && step.step_order > currentStepOrder) return;
                     
                     signatories.push({
                       role: step.role_label || step.designations?.name || 'Signatory',
