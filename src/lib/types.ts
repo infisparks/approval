@@ -86,6 +86,7 @@ export interface RequestApproval {
   profiles?: UserProfile;
   approver_name?: string;
   approver_email?: string;
+  step_key?: string;
 }
 
 export interface Cell {
@@ -133,6 +134,7 @@ export interface ApprovalRequest {
   revisions?: Revision[];
   settlement_requests?: SettlementRequest[];
   attachments?: string[];
+  ref_no?: string;
 }
 
 export interface AcademicYear {

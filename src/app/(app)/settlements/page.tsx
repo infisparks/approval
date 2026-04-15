@@ -84,13 +84,11 @@ export default function SettlementsPage() {
           <div class="pdf-item" style="display: flex; justify-content: space-between; margin-bottom: 40px; padding-top: 140px;">
             <div>
               <h3 style="margin: 0 0 10px; font-weight: 800; color: #000; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; opacity: 0.5;">SETTLEMENT FOR:</h3>
-              <div style="display: flex; flex-direction: column; gap: 8px;">
-                <p style="margin: 0; font-size: 20px; font-weight: 900; color: #0f172a; line-height: 1.2;">${s.approval_requests?.title}</p>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <p style="margin: 0; font-size: 13px; font-weight: 700; color: #3b82f6;">${s.approval_requests?.approval_templates?.name}</p>
-                  <div style="font-size: 10px; font-weight: 950; color: #0f172a; background: #f8fafc; border: 1px solid #e2e8f0; padding: 2px 8px; border-radius: 5px; letter-spacing: 0.5px;">REF: #${s.approval_requests?.ref_no || 'N/A'}</div>
-                </div>
+              <div style="display: flex; align-items: baseline; gap: 8px;">
+                <p style="margin: 0; font-size: 18px; font-weight: 900; color: #0f172a;">${s.approval_requests?.title}</p>
+                <span style="font-size: 10px; font-weight: 900; color: #64748b; background: #f1f5f9; padding: 2px 8px; border-radius: 4px;">#${s.approval_requests?.ref_no || 'N/A'}</span>
               </div>
+              <p style="margin: 4px 0; font-size: 13px; font-weight: 600; color: #3b82f6;">${s.approval_requests?.approval_templates?.name}</p>
             </div>
             <div style="text-align: right;">
               <h3 style="margin: 0 0 10px; font-weight: 800; color: #000; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; opacity: 0.5;">REQUESTER:</h3>
@@ -157,7 +155,7 @@ export default function SettlementsPage() {
               const uniqueApprovals = stepOrder.map(key => {
                 const logs = (s.settlement_approvals || [])
                   .filter(a => a.step_key === key)
-                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                  .sort((a, b) => new Date(b.acted_at || 0).getTime() - new Date(a.acted_at || 0).getTime());
                 return logs[0];
               }).filter(Boolean);
 
@@ -605,7 +603,7 @@ export default function SettlementsPage() {
                         </td>
                         <td style={{ textAlign: 'right', borderBottom: isSelected ? 'none' : '1px solid var(--border)' }}>
                           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                            {(s.status === 'approved' || s.current_step === 'deputy_chief_accountant') && (
+                            {s.status === 'approved' && (
                               <button 
                                 className="btn btn-ghost btn-sm"
                                 onClick={(e) => { e.stopPropagation(); generatePDF(s); }}
