@@ -815,6 +815,7 @@ export async function approveSettlement(settlementId: string, payload: { actual_
     updates.director_remarks = payload.remarks;
   } else if (settlement.current_step === 'accountant_final') {
     nextStep = 'deputy_chief_accountant';
+    finalStatus = 'approved';
   } else if (settlement.current_step === 'deputy_chief_accountant') {
     nextStep = 'completed';
     finalStatus = 'approved';

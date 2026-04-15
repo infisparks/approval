@@ -44,115 +44,234 @@ export default function SettlementsPage() {
   }, []);
 
   const generatePDF = async (s: SettlementRequest) => {
-    const doc = new jsPDF('p', 'mm', 'a4');
-    const letterheadUrl = s.profiles?.institute_types?.letterhead_url;
-    
-    // Create a temporary container for PDF generation
-    const container = document.createElement('div');
-    container.style.width = '800px';
-    container.style.padding = '40px';
-    container.style.background = '#fff';
-    container.style.position = 'fixed';
-    container.style.top = '-10000px';
-    container.style.fontFamily = 'Inter, sans-serif';
-    
-    container.innerHTML = `
-      <div style="margin-bottom: 30px; text-align: center;">
-        ${letterheadUrl ? `<img src="${letterheadUrl}" style="max-width: 100%; height: auto;" />` : `<h1 style="color: var(--accent); margin: 0;">SETTLEMENT VOUCHER</h1>`}
-        <div style="height: 2px; background: #eee; margin-top: 20px;"></div>
-      </div>
-
-      <div style="display: flex; justify-content: space-between; margin-bottom: 40px;">
-        <div>
-          <h3 style="margin: 0 0 10px; font-weight: 800; color: #000;">SETTLEMENT FOR:</h3>
-          <p style="margin: 0; font-size: 14px; font-weight: 600;">${s.approval_requests?.title}</p>
-          <p style="margin: 4px 0; font-size: 12px; color: #64748b;">${s.approval_requests?.approval_templates?.name}</p>
-        </div>
-        <div style="text-align: right;">
-          <h3 style="margin: 0 0 10px; font-weight: 800; color: #000;">REQUESTER:</h3>
-          <p style="margin: 0; font-size: 14px; font-weight: 700;">${s.profiles?.full_name}</p>
-          <p style="margin: 4px 0; font-size: 12px; color: #64748b;">Date: ${new Date(s.updated_at).toLocaleDateString('en-IN')}</p>
-        </div>
-      </div>
-
-      <table style="width: 100%; border-collapse: collapse; margin-bottom: 40px;">
-        <thead>
-          <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
-            <th style="padding: 12px; text-align: left; font-size: 12px; font-weight: 800;">DESCRIPTION</th>
-            <th style="padding: 12px; text-align: right; font-size: 12px; font-weight: 800;">BUDGETED (₹)</th>
-            <th style="padding: 12px; text-align: right; font-size: 12px; font-weight: 800;">ACTUAL SPENT (₹)</th>
-            <th style="padding: 12px; text-align: right; font-size: 12px; font-weight: 800;">VARIANCE</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${(s.actual_bifurcation || []).map((item: any, i: number) => {
-            const original = s.approval_requests?.bifurcation?.[i]?.total || 0;
-            const variance = Number(item.total) - original;
-            return `
-              <tr style="border-bottom: 1px solid #f1f5f9;">
-                <td style="padding: 12px; font-size: 13px;">${item.description}</td>
-                <td style="padding: 12px; text-align: right; font-size: 13px;">${original.toLocaleString('en-IN')}</td>
-                <td style={{ padding: 12, textAlign: 'right', font-size: 13, fontWeight: 700 }}>${Number(item.total).toLocaleString('en-IN')}</td>
-                <td style="padding: 12px; text-align: right; font-size: 13px; font-weight: 700; color: ${variance > 0 ? '#ef4444' : variance < 0 ? '#10b981' : '#64748b'};">
-                  ${variance > 0 ? '+' : ''}${variance.toLocaleString('en-IN')}
-                </td>
-              </tr>
-            `;
-          }).join('')}
-        </tbody>
-        <tfoot>
-          <tr style="border-top: 2px solid #e2e8f0; background: #f8fafc;">
-            <td style="padding: 15px; font-size: 14px; font-weight: 800;">TOTALS</td>
-            <td style="padding: 15px; text-align: right; font-size: 14px; font-weight: 800;">${s.original_amount.toLocaleString('en-IN')}</td>
-            <td style="padding: 15px; text-align: right; font-size: 15px; font-weight: 800; color: #38bdf8;">${s.actual_amount.toLocaleString('en-IN')}</td>
-            <td style="padding: 15px; text-align: right; font-size: 14px; font-weight: 800;">${(s.actual_amount - s.original_amount).toLocaleString('en-IN')}</td>
-          </tr>
-        </tfoot>
-      </table>
-
-      ${(s.advance_logs && s.advance_logs.length > 0) ? `
-        <div style="margin-bottom: 40px;">
-          <h3 style="font-size: 12px; font-weight: 800; color: #64748b; margin-bottom: 15px;">ADVANCE PAYMENTS HISTORY</h3>
-          <table style="width: 100%; border-collapse: collapse;">
-            ${(s.advance_logs || []).map((l: any) => `
-              <tr style="border-bottom: 1px solid #f1f5f9;">
-                <td style="padding: 10px; font-size: 12px;">${new Date(l.date).toLocaleDateString('en-IN')}</td>
-                <td style="padding: 10px; font-size: 12px; font-weight: 600;">${l.description}</td>
-                <td style="padding: 10px; text-align: right; font-size: 12px; font-weight: 800;">₹${Number(l.amount).toLocaleString('en-IN')}</td>
-              </tr>
-            `).join('')}
-          </table>
-        </div>
-      ` : ''}
-
-      <div style="margin-top: 80px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
-        ${(s.settlement_approvals || []).map((a: any) => `
-          <div style="text-align: center;">
-            <div style="height: 60px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
-              ${a.profiles?.signature ? `<img src="${a.profiles.signature}" style="max-height: 50px; max-width: 100px; object-fit: contain;" />` : '<div style="border-bottom: 1px solid #ccc; width: 80%;"></div>'}
-            </div>
-            <p style="margin: 0; font-size: 11px; font-weight: 800;">${a.profiles?.full_name}</p>
-            <p style="margin: 2px 0; font-size: 10px; color: #64748b;">${a.profiles?.designations?.name}</p>
-            <p style="margin: 2px 0; font-size: 9px; color: #cbd5e1;">${a.step_key.toUpperCase()}</p>
-          </div>
-        `).join('')}
-      </div>
-    `;
-
-    document.body.appendChild(container);
     try {
-      const canvas = await html2canvas(container, { scale: 2, useCORS: true });
-      const imgData = canvas.toDataURL('image/png');
-      const imgProps = doc.getImageProperties(imgData);
+      // Helper to load image as DataURL
+      const loadImageAsDataURL = async (url: string): Promise<string | null> => {
+        try {
+          return await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext('2d');
+              ctx?.drawImage(img, 0, 0);
+              resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = url;
+          });
+        } catch (e) {
+          return null;
+        }
+      };
+
+      const letterheadUrl = s.profiles?.institute_types?.letterhead_url;
+      const letterheadDataUrl = letterheadUrl ? await loadImageAsDataURL(letterheadUrl) : null;
+
+      // Create a temporary container for PDF generation
+      const container = document.createElement('div');
+      container.style.width = '800px';
+      container.style.padding = '0'; // Padding handled by safe areas
+      container.style.background = 'transparent';
+      container.style.position = 'fixed';
+      container.style.top = '-10000px';
+      container.style.fontFamily = 'Inter, sans-serif';
+      
+      container.innerHTML = `
+        <div style="padding: 40px; background: transparent;">
+          <div class="pdf-item" style="display: flex; justify-content: space-between; margin-bottom: 40px; padding-top: 140px;">
+            <div>
+              <h3 style="margin: 0 0 10px; font-weight: 800; color: #000; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; opacity: 0.5;">SETTLEMENT FOR:</h3>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <p style="margin: 0; font-size: 20px; font-weight: 900; color: #0f172a; line-height: 1.2;">${s.approval_requests?.title}</p>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <p style="margin: 0; font-size: 13px; font-weight: 700; color: #3b82f6;">${s.approval_requests?.approval_templates?.name}</p>
+                  <div style="font-size: 10px; font-weight: 950; color: #0f172a; background: #f8fafc; border: 1px solid #e2e8f0; padding: 2px 8px; border-radius: 5px; letter-spacing: 0.5px;">REF: #${s.approval_requests?.ref_no || 'N/A'}</div>
+                </div>
+              </div>
+            </div>
+            <div style="text-align: right;">
+              <h3 style="margin: 0 0 10px; font-weight: 800; color: #000; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; opacity: 0.5;">REQUESTER:</h3>
+              <p style="margin: 0; font-size: 16px; font-weight: 800; color: #0f172a;">${s.profiles?.full_name}</p>
+              <p style="margin: 4px 0; font-size: 12px; font-weight: 600; color: #64748b;">Date: ${new Date(s.updated_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+            </div>
+          </div>
+
+          <div class="pdf-item" style="margin-bottom: 40px; background: #fff; border: 1.5px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+            <div style="background: #f8fafc; padding: 12px 20px; border-bottom: 1.5px solid #e2e8f0; font-size: 10px; font-weight: 900; letter-spacing: 1px; color: #475569;">COST RECONCILIATION SUMMARY</div>
+            <table style="width: 100%; border-collapse: collapse;">
+              <thead>
+                <tr style="background: rgba(15,23,42,0.02); border-bottom: 1px solid #e2e8f0;">
+                  <th style="padding: 12px 20px; text-align: left; font-size: 10px; font-weight: 800; color: #64748b;">DESCRIPTION</th>
+                  <th style="padding: 12px 20px; text-align: right; font-size: 10px; font-weight: 800; color: #64748b;">BUDGETED (₹)</th>
+                  <th style="padding: 12px 20px; text-align: right; font-size: 10px; font-weight: 800; color: #64748b;">ACTUAL SPENT (₹)</th>
+                  <th style="padding: 12px 20px; text-align: right; font-size: 10px; font-weight: 800; color: #64748b;">VARIANCE</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${(s.actual_bifurcation || []).map((item: any, i: number) => {
+                  const original = s.approval_requests?.bifurcation?.[i]?.total || 0;
+                  const variance = Number(item.total) - original;
+                  return `
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                      <td style="padding: 12px 20px; font-size: 12px; font-weight: 600; color: #1e293b;">${item.description}</td>
+                      <td style="padding: 12px 20px; text-align: right; font-size: 12px; color: #64748b;">${original.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      <td style="padding: 12px 20px; text-align: right; font-size: 12px; font-weight: 700; color: #0f172a;">${Number(item.total).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      <td style="padding: 12px 20px; text-align: right; font-size: 12px; font-weight: 700; color: ${variance > 0 ? '#ef4444' : variance < 0 ? '#10b981' : '#64748b'};">
+                        ${variance > 0 ? '+' : ''}${variance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+              <tfoot>
+                <tr style="background: #f8fafc; border-top: 2px solid #e2e8f0;">
+                  <td style="padding: 15px 20px; font-size: 11px; font-weight: 900; color: #475569;">TOTAL DISBURSEMENT</td>
+                  <td style="padding: 15px 20px; text-align: right; font-size: 12px; font-weight: 800; color: #64748b;">${s.original_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                  <td style="padding: 15px 20px; text-align: right; font-size: 14px; font-weight: 900; color: #3b82f6;">₹${s.actual_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                  <td style="padding: 15px 20px; text-align: right; font-size: 12px; font-weight: 900; color: #0f172a;">${(s.actual_amount - s.original_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- ORIGINAL APPROVAL STATEMENT -->
+          <div style="margin-bottom: 40px;">
+            <div class="pdf-item" style="background: #fff; border: 1.5px solid #e2e8f0; border-radius: 14px; padding: 25px; position: relative;">
+                <div style="position: absolute; top: -10px; left: 20px; background: #0f172a; color: #fff; padding: 4px 12px; border-radius: 6px; font-size: 9px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase;">Approval Statement Basis</div>
+                <h3 style="margin: 0 0 15px; font-size: 16px; font-weight: 850; color: #0f172a; line-height: 1.3;">${s.approval_requests?.content?.subject || 'Re: Application for Approval'}</h3>
+                <div style="color: #334155; font-size: 12px; line-height: 1.6; white-space: pre-wrap; font-weight: 450;">
+                  ${(s.approval_requests?.content?.body || 'No detailed content provided.').split('\n').map((p: string) => p.trim() ? `<div class="pdf-item" style="margin-bottom: 12px;">${p}</div>` : '<div style="height: 10px;"></div>').join('')}
+                </div>
+            </div>
+          </div>
+
+          <div style="margin-top: 40px; display: flex; flex-wrap: wrap; justify-content: center; gap: 30px; padding: 0 10px; width: 100%;">
+            ${(() => {
+              // Map steps to an ordered array to ensure consistent layout
+              const stepOrder = ['store', 'accountant', 'director', 'accountant_final', 'deputy_chief_accountant'];
+              
+              // Get the latest approval for each step (preventing duplicates)
+              const uniqueApprovals = stepOrder.map(key => {
+                const logs = (s.settlement_approvals || [])
+                  .filter(a => a.step_key === key)
+                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                return logs[0];
+              }).filter(Boolean);
+
+              return uniqueApprovals.map((a: any) => `
+                <div class="pdf-item" style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 160px; padding: 10px; position: relative;">
+                  ${a.step_key === 'deputy_chief_accountant' ? `
+                    <div style="position: absolute; top: -15px; right: 10px; color: #10b981;">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                  ` : ''}
+                  <div style="height: 60px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; width: 100%;">
+                    ${a.profiles?.signature ? `<img src="${a.profiles.signature}" style="max-height: 55px; max-width: 120px; object-fit: contain; filter: grayscale(1) contrast(1.2);" />` : '<div style="border-bottom: 1.5px dashed #cbd5e1; width: 80%; margin-top: 30px;"></div>'}
+                  </div>
+                  <div style="width: 100%; height: 1.5px; background: rgba(15,23,42,0.1); margin-bottom: 8px;"></div>
+                  <p style="margin: 0; font-size: 11px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">${a.profiles?.full_name}</p>
+                  <p style="margin: 2px 0; font-size: 10px; font-weight: 700; color: #64748b;">${a.profiles?.designations?.name}</p>
+                  <p style="margin: 4px 0; font-size: 9px; font-weight: 950; color: #3b82f6; text-transform: uppercase; letter-spacing: 1px;">${a.step_key.replace(/_/g, ' ')}</p>
+                </div>
+              `).join('');
+            })()}
+          </div>
+          
+          <div class="pdf-item" style="margin-top: 80px; padding-top: 20px; border-top: 1.5px solid #f1f5f9; text-align: center;">
+            <p style="margin: 0; font-size: 9px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 2px;">This is a system generated settlement voucher</p>
+            <p style="margin: 4px 0; font-size: 8px; color: #cbd5e1; font-weight: 500;">Authentication Hash: ${s.id.slice(0, 8).toUpperCase()}-${new Date().getTime().toString().slice(-4)}</p>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(container);
+      
+      const canvas = await html2canvas(container, { 
+        scale: 2, 
+        useCORS: true,
+        backgroundColor: null
+      });
+      
+      const doc = new jsPDF('p', 'pt', 'a4');
       const pdfWidth = doc.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      doc.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      doc.save(`Settlement_${s.approval_requests?.title.replace(/\s+/g, '_')}.pdf`);
+      const pdfHeight = doc.internal.pageSize.getHeight();
+      
+      const pxPerPt = canvas.width / pdfWidth;
+      const elements = container.querySelectorAll('.pdf-item');
+      const containerTop = container.getBoundingClientRect().top;
+      
+      const elementRects = Array.from(elements)
+        .map(el => {
+          const rect = el.getBoundingClientRect();
+          return {
+            top: (rect.top - containerTop) * 2, // scale 2
+            bottom: (rect.bottom - containerTop) * 2
+          };
+        })
+        .sort((a, b) => a.top - b.top);
+
+      const headerSpace = 130;
+      const footerSpace = 40;
+      const safeArea = pdfHeight - headerSpace - footerSpace;
+      
+      const safeAreaPx = safeArea * pxPerPt;
+      const pdfHeightPx = pdfHeight * pxPerPt;
+      const headerSpacePx = headerSpace * pxPerPt;
+
+      let currentYPx = 0;
+      let pageNum = 0;
+
+      while (currentYPx < canvas.height - 10) {
+        if (pageNum > 0) doc.addPage();
+
+        // Draw Letterhead
+        if (letterheadDataUrl) {
+          doc.addImage(letterheadDataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+        }
+
+        const availableHeightPx = (pageNum === 0) ? (pdfHeightPx - footerSpace * pxPerPt) : safeAreaPx;
+        let sliceHeightPx = Math.min(canvas.height - currentYPx, availableHeightPx);
+
+        // Avoid cutting elements
+        if (currentYPx + sliceHeightPx < canvas.height) {
+          const idealBottom = currentYPx + sliceHeightPx;
+          const intersectedElement = elementRects.find(rect => rect.top < idealBottom && rect.bottom > idealBottom);
+          
+          if (intersectedElement) {
+            const newSliceHeightPx = intersectedElement.top - currentYPx - 15;
+            if (newSliceHeightPx > 0) sliceHeightPx = newSliceHeightPx;
+          }
+        }
+
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = sliceHeightPx;
+        const sCtx = sliceCanvas.getContext('2d');
+        if (sCtx) {
+          sCtx.drawImage(canvas, 0, currentYPx, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
+          const sliceData = sliceCanvas.toDataURL('image/png');
+          const targetYPt = (pageNum === 0) ? 0 : headerSpace;
+          doc.addImage(sliceData, 'PNG', 0, targetYPt, pdfWidth, sliceHeightPx / pxPerPt, undefined, 'FAST');
+        }
+
+        currentYPx += (sliceHeightPx + 1);
+        pageNum++;
+        if (pageNum > 20) break;
+      }
+
+      const blob = doc.output('blob');
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      
     } catch (err) {
       console.error('PDF Generation Error:', err);
-      alert('Failed to generate PDF. Please ensure all images (letterhead, signatures) are valid.');
+      alert('Failed to generate PDF. Please ensure all signatures and letterhead are valid.');
     } finally {
-      document.body.removeChild(container);
+      const container = document.querySelector('div[style*="top: -10000px"]');
+      if (container) document.body.removeChild(container);
     }
   };
 
@@ -365,7 +484,7 @@ export default function SettlementsPage() {
                   <th>Vendor Info</th>
                   <th>Original</th>
                   <th>Actual</th>
-                  <th>Advance (₹)</th>
+                  <th>Amount paid (₹)</th>
                   <th>Variance</th>
                   <th>Current Status</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
@@ -486,7 +605,7 @@ export default function SettlementsPage() {
                         </td>
                         <td style={{ textAlign: 'right', borderBottom: isSelected ? 'none' : '1px solid var(--border)' }}>
                           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                            {s.status === 'approved' && (
+                            {(s.status === 'approved' || s.current_step === 'deputy_chief_accountant') && (
                               <button 
                                 className="btn btn-ghost btn-sm"
                                 onClick={(e) => { e.stopPropagation(); generatePDF(s); }}
@@ -748,7 +867,7 @@ function SettlementProcessInLine({ settlement, onClose, onDone, role }: any) {
                      <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--midnight)' }}>ADVANCE PAYMENT LEDGER</span>
                   </div>
                   <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--midnight)' }}>
-                     Total Advance: <span style={{ color: 'var(--accent)' }}>₹{Number(settlement.advance_amount || 0).toLocaleString('en-IN')}</span>
+                     Total Amount: <span style={{ color: 'var(--accent)' }}>₹{Number(settlement.advance_amount || 0).toLocaleString('en-IN')}</span>
                   </div>
               </div>
               
@@ -783,7 +902,7 @@ function SettlementProcessInLine({ settlement, onClose, onDone, role }: any) {
                     {/* Add New Advance */}
                     {role.isAccountant && (
                        <div style={{ padding: 20, background: '#f1f5f9', borderRadius: 12 }}>
-                          <h4 style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 800 }}>Add New Advance</h4>
+                          <h4 style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 800 }}>Add New Amount</h4>
                           <div style={{ marginBottom: 12 }}>
                              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--slate)', marginBottom: 4 }}>Amount (₹)</label>
                              <input 

@@ -126,227 +126,130 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
       const referenceId = getReferenceId();
 
       container.innerHTML = `
-        <div style="width: 595.28pt; background: transparent; position: relative; margin: 0; padding: 0; overflow: visible; box-sizing: border-box;">
-          <!-- CONTENT OVERLAY LAYER (No letterhead here to avoid double-rendering) -->
-          <div style="position: relative; z-index: 10; padding: 210px 50px 70px; display: flex; flex-direction: column; width: 100%; box-sizing: border-box; overflow: visible; background: transparent;">
-            <!-- MODERN HEADER -->
-            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 30px; border-bottom: 1.5px solid #0f172a; padding-bottom: 15px;">
-              <div style="max-width: 65%;">
-                <div style="margin-bottom: 15px;">
-                  <p style="margin: 0; color: #2563eb; font-size: 10px; font-weight: 950; letter-spacing: 1.5px; text-transform: uppercase;">Reference No: ${referenceId}</p>
-                </div>
-                <h1 style="margin: 0; color: #0f172a; font-size: 28px; font-weight: 950; line-height: 1.1; letter-spacing: -1px;">Approval Certificate<br/><span style="color: #000; font-size: 22px; letter-spacing: 0px;">Submitted for Management Approval</span></h1>
-                <div style="margin-top: 20px; display: flex; gap: 35px;">
-                  <div>
-                    <p style="margin: 0; color: #94a3b8; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Generate Date</p>
-                    <p style="margin: 3px 0 0; color: #0f172a; font-size: 12px; font-weight: 800;">${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                  </div>
-                  <div>
-                    <p style="margin: 0; color: #94a3b8; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Approve Date</p>
-                    <p style="margin: 3px 0 0; color: #0f172a; font-size: 12px; font-weight: 800;">
-                      ${request.status === 'approved' 
-                        ? (request.request_approvals?.filter(a => a.status === 'approved').sort((a, b) => new Date(b.acted_at || 0).getTime() - new Date(a.acted_at || 0).getTime())[0]?.acted_at 
-                            ? new Date(request.request_approvals.filter(a => a.status === 'approved').sort((a, b) => new Date(b.acted_at || 0).getTime() - new Date(a.acted_at || 0).getTime())[0].acted_at!).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-                            : 'N/A')
-                        : 'PENDING'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 12px;">
-                <div style="padding: 6px; background: transparent; border: 1.5px solid rgba(15,23,42,0.1); border-radius: 12px; box-shadow: none;">
-                  <img src="${qrCodeDataUrl}" alt="QR" style="width: 80px; height: 80px; display: block;" />
-                </div>
-                <p style="margin: 0; color: #94a3b8; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Secure Verification QR</p>
-              </div>
+        <div style="padding: 40px; background: transparent; width: 100%; box-sizing: border-box;">
+          <!-- MODERN PREMIUM HEADER -->
+          <div class="pdf-item" style="display: flex; justify-content: space-between; margin-bottom: 45px; padding-top: 140px; border-bottom: 2px solid #0f172a; padding-bottom: 25px;">
+            <div style="max-width: 60%;">
+               <p style="margin: 0 0 8px; color: #3b82f6; font-size: 11px; font-weight: 950; text-transform: uppercase; letter-spacing: 2px;">Subject Application</p>
+               <h1 style="margin: 0; color: #0f172a; font-size: 24px; font-weight: 900; line-height: 1.2; letter-spacing: -0.5px;">${request.title}</h1>
+               <p style="margin: 10px 0 0; font-size: 13px; font-weight: 600; color: #64748b;">Reference ID: <span style="color: #0f172a;">${referenceId}</span></p>
             </div>
-
-            <!-- PRIMARY INFORMATION -->
-            <div class="pdf-item" style="display: grid; grid-template-columns: 2fr 1fr; gap: 35px; margin-bottom: 40px; background: transparent;">
-              <div style="background: transparent; border-left: 5px solid #0f172a; padding: 25px; border-radius: 0 10px 10px 0;">
-                <p style="margin: 0 0 8px; color: #2563eb; font-size: 11px; font-weight: 950; text-transform: uppercase; letter-spacing: 1.5px;">Subject Title</p>
-                <h2 style="margin: 0 0 15px; color: #0f172a; font-size: 19px; font-weight: 900; line-height: 1.3; letter-spacing: -0.2px;">${request.title}</h2>
-                <div style="display: flex; gap: 25px; background: transparent;">
-                  <div>
-                    <p style="margin: 0; color: #94a3b8; font-size: 9px; font-weight: 800; text-transform: uppercase;">Origin Department</p>
-                    <p style="margin: 3px 0 0; color: #1e293b; font-size: 11px; font-weight: 800;">${request.cells?.name || 'Central Administration'}</p>
-                  </div>
-                  <div>
-                    <p style="margin: 0; color: #94a3b8; font-size: 9px; font-weight: 800; text-transform: uppercase;">Approval Protocol</p>
-                    <p style="margin: 3px 0 0; color: #1e293b; font-size: 11px; font-weight: 800;">${request.template_name || 'Standard Internal'}</p>
-                  </div>
+            <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end;">
+                <div style="padding: 5px; background: #fff; border: 1.5px solid #e2e8f0; border-radius: 10px; margin-bottom: 12px;">
+                  <img src="${qrCodeDataUrl}" style="width: 75px; height: 75px; display: block;" />
                 </div>
-              </div>
-              <div style="display: flex; flex-direction: column; gap: 15px; background: transparent;">
-                <div style="background: rgba(16,185,129,0.05); border: 1px solid rgba(16,185,129,0.2); border-radius: 12px; padding: 18px; text-align: center;">
-                  <p style="margin: 0 0 6px; color: #166534; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Approved Value</p>
-                  <p style="margin: 0; color: #15803d; font-size: 26px; font-weight: 950; letter-spacing: -1.5px;">
-                    ${request.has_amount ? `₹${request.amount?.toLocaleString('en-IN')}` : 'NO AMT'}
-                  </p>
-                </div>
-                <div style="background: rgba(30,64,175,0.05); border: 1px solid rgba(30,64,175,0.2); border-radius: 12px; padding: 18px; text-align: center;">
-                  <p style="margin: 0 0 6px; color: #1e40af; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Overall Decision</p>
-                  <div style="margin-top: 8px;">${getStatusBadge(request.status?.toUpperCase())}</div>
-                </div>
-              </div>
+                <p style="margin: 0; color: #94a3b8; font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px;">SECURE DIGITAL AUTH</p>
             </div>
+          </div>
 
-            <!-- STATEMENT BODY -->
-            <div style="margin-bottom: 45px; background: transparent;">
-              <div class="pdf-item" style="display: flex; align-items: center; gap: 15px; margin-bottom: 12px; background: transparent;">
-                <div style="height: 1.5px; flex: 1; background: rgba(15,23,42,0.1);"></div>
-                <p style="margin: 0; color: #64748b; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px;">Case Statement & Justification</p>
-                <div style="height: 1.5px; flex: 1; background: rgba(15,23,42,0.1);"></div>
-              </div>
-              <div style="background: transparent; padding: 0 10px; border-left: 2px solid rgba(15,23,42,0.1); margin-left: 5px;">
-                <h3 class="pdf-item" style="margin: 0 0 8px; font-size: 15px; font-weight: 850; color: #0f172a; letter-spacing: -0.3px;">${request.content?.subject || 'Reference Application'}</h3>
-                <div style="color: #334155; font-size: 11.5px; line-height: 1.55; white-space: pre-wrap; font-weight: 450;">
-                  ${(request.content?.body || 'No detailed content provided.').split('\n').map((p: string) => p.trim() ? `<div class="pdf-item" style="margin: 0;">${p}</div>` : '<div style="height: 8px;"></div>').join('')}
-                </div>
-              </div>
-              
-              ${request.has_amount && request.bifurcation && Array.isArray(request.bifurcation) && request.bifurcation.length > 0 ? `
-                <div class="pdf-item" style="margin-top: 30px; background: transparent;">
-                  <p style="margin: 0 0 12px; color: #64748b; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px;">Financial Bifurcation & GST Breakdown</p>
-                  <table style="width: 100%; border-collapse: collapse; border: 1.5px solid rgba(15,23,42,0.1); border-radius: 8px; overflow: hidden; font-size: 11px; background: transparent;">
-                    <thead>
-                      <tr style="background: rgba(15,23,42,0.03); border-bottom: 1.5px solid rgba(15,23,42,0.1);">
-                        <th style="padding: 10px 15px; text-align: left; color: #475569; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Item Description</th>
-                        <th style="padding: 10px 15px; text-align: right; color: #475569; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Base (₹)</th>
-                        <th style="padding: 10px 15px; text-align: right; color: #475569; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">GST</th>
-                        <th style="padding: 10px 15px; text-align: right; color: #475569; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Total (₹)</th>
-                      </tr>
-                    </thead>
-                    <tbody style="background: transparent;">
-                      ${request.bifurcation.map((item: any) => `
-                        <tr style="border-bottom: 1px solid rgba(15,23,42,0.05); background: transparent;">
-                          <td style="padding: 10px 15px; color: #1e293b; font-weight: 600;">${item.description}</td>
-                          <td style="padding: 10px 15px; text-align: right; color: #1e293b;">${Number(item.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td style="padding: 10px 15px; text-align: right; color: #16a34a; font-weight: 600;">${item.gstRate}% (₹${Number(item.gstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })})</td>
-                          <td style="padding: 10px 15px; text-align: right; color: #0f172a; font-weight: 800;">₹${Number(item.total).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                        </tr>
-                      `).join('')}
-                    </tbody>
-                    <tfoot>
-                      <tr style="background: rgba(22,163,74,0.05);">
-                        <td colspan="3" style="padding: 12px 15px; text-align: right; color: #166534; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; font-size: 10px;">Grand Total</td>
-                        <td style="padding: 12px 15px; text-align: right; color: #15803d; font-weight: 950; font-size: 14px;">₹${Number(request.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              ` : ''}
+          <!-- PRIMARY METADATA GRID -->
+          <div class="pdf-item" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px; margin-bottom: 40px;">
+            <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 15px;">
+              <p style="margin: 0 0 5px; color: #94a3b8; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Origin Entity</p>
+              <p style="margin: 0; color: #1e293b; font-size: 12px; font-weight: 800;">${request.cells?.name || 'Central Administration'}</p>
             </div>
+            <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 15px;">
+              <p style="margin: 0 0 5px; color: #94a3b8; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Protocol Type</p>
+              <p style="margin: 0; color: #1e293b; font-size: 12px; font-weight: 800;">${request.template_name || 'Standard'}</p>
+            </div>
+            <div style="background: ${request.has_amount ? 'rgba(16,185,129,0.05)' : '#f8fafc'}; border: 1.5px solid ${request.has_amount ? 'rgba(16,185,129,0.2)' : '#e2e8f0'}; border-radius: 12px; padding: 15px; text-align: right;">
+              <p style="margin: 0 0 5px; color: ${request.has_amount ? '#166534' : '#94a3b8'}; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Value Involved</p>
+              <p style="margin: 0; color: ${request.has_amount ? '#15803d' : '#1e293b'}; font-size: 16px; font-weight: 950;">${request.has_amount ? `₹${request.amount?.toLocaleString('en-IN')}` : 'NO AMT'}</p>
+            </div>
+          </div>
 
-            <!-- ENDORSEMENT BOARD -->
-            <div style="margin-top: auto; border: 1.5px solid rgba(15,23,42,0.1); border-radius: 16px; overflow: hidden; background: transparent;">
-              <div style="background: rgba(15,23,42,0.02); border-bottom: 1.5px solid rgba(15,23,42,0.1); padding: 15px 25px; display: flex; justify-content: space-between; align-items: center;">
-                <p style="margin: 0; color: #0f172a; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px;">Official Endorsement Ledger</p>
-                <p style="margin: 0; color: #94a3b8; font-size: 9px; font-weight: 700; text-transform: uppercase;">Digital Authentication Board</p>
-              </div>
-              <div style="padding: 25px; display: flex; flex-direction: column; gap: 30px; background: transparent;">
+          <!-- CORE JUSTIFICATION -->
+          <div style="margin-bottom: 40px;">
+            <div class="pdf-item" style="background: #fff; border: 1.5px solid #e2e8f0; border-radius: 14px; padding: 25px; position: relative;">
+               <div style="position: absolute; top: -10px; left: 20px; background: #0f172a; color: #fff; padding: 4px 12px; border-radius: 6px; font-size: 9px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase;">Executive Statement</div>
+               <h3 style="margin: 0 0 15px; font-size: 16px; font-weight: 850; color: #0f172a; line-height: 1.3;">${request.content?.subject || 'Re: Application for Approval'}</h3>
+               <div style="color: #334155; font-size: 12px; line-height: 1.6; white-space: pre-wrap; font-weight: 450;">
+                 ${(request.content?.body || 'No detailed content provided.').split('\n').map((p: string) => p.trim() ? `<div class="pdf-item" style="margin-bottom: 12px;">${p}</div>` : '<div style="height: 10px;"></div>').join('')}
+               </div>
+            </div>
+          </div>
+
+          ${request.has_amount && request.bifurcation && Array.isArray(request.bifurcation) && request.bifurcation.length > 0 ? `
+            <div class="pdf-item" style="margin-bottom: 45px; background: #fff; border: 1.5px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+              <div style="background: #f8fafc; padding: 12px 20px; border-bottom: 1.5px solid #e2e8f0; font-size: 10px; font-weight: 900; letter-spacing: 1px; color: #475569;">FINANCIAL BREAKDOWN & GST MATRIX</div>
+              <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                  <tr style="background: rgba(15,23,42,0.02); border-bottom: 1px solid #e2e8f0;">
+                    <th style="padding: 12px 20px; text-align: left; font-size: 10px; font-weight: 800; color: #64748b;">DESCRIPTION</th>
+                    <th style="padding: 12px 20px; text-align: right; font-size: 10px; font-weight: 800; color: #64748b;">BASE (₹)</th>
+                    <th style="padding: 12px 20px; text-align: right; font-size: 10px; font-weight: 800; color: #64748b;">GST/TAX</th>
+                    <th style="padding: 12px 20px; text-align: right; font-size: 10px; font-weight: 800; color: #64748b;">TOTAL (₹)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${request.bifurcation.map((item: any) => `
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                      <td style="padding: 12px 20px; font-size: 12px; font-weight: 600; color: #1e293b;">${item.description}</td>
+                      <td style="padding: 12px 20px; text-align: right; font-size: 12px; color: #64748b;">${Number(item.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      <td style="padding: 12px 20px; text-align: right; font-size: 11px; font-weight: 700; color: #16a34a;">${item.gstRate}% (₹${Number(item.gstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })})</td>
+                      <td style="padding: 12px 20px; text-align: right; font-size: 12px; font-weight: 800; color: #0f172a;">₹${Number(item.total).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+                <tfoot>
+                  <tr style="background: rgba(16,185,129,0.05); border-top: 2px solid #e2e8f0;">
+                    <td colspan="3" style="padding: 15px 20px; font-size: 11px; font-weight: 900; color: #166534;">AGGREGATE PAYABLE AMOUNT</td>
+                    <td style="padding: 15px 20px; text-align: right; font-size: 15px; font-weight: 950; color: #15803d;">₹${Number(request.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ` : ''}
+
+          <!-- AUTHENTICATION BOARD -->
+          <div>
+            <div class="pdf-item" style="display: flex; align-items: center; gap: 15px; margin-bottom: 25px;">
+              <div style="height: 2px; flex: 1; background: #0f172a;"></div>
+              <p style="margin: 0; color: #0f172a; font-size: 11px; font-weight: 950; text-transform: uppercase; letter-spacing: 2px;">Institutional Endorsement Ledger</p>
+              <div style="height: 2px; flex: 1; background: #0f172a;"></div>
+            </div>
+            
+            <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 25px; padding: 0 10px;">
                 ${(() => {
-                  const roleOrder = ['Prepared by', 'Verified by', 'Forwarded by', 'Recommended by', 'Approved by'];
                   const signatories: any[] = [];
                   
-                  // 1. Add Requester
-                  const requesterRole = request.approval_templates?.requester_role_label || 'Prepared by';
-                  signatories.push({
-                    role: requesterRole,
-                    name: request.requester_name || request.profiles?.full_name || '',
-                    designation: request.profiles?.designations?.name || '',
-                    signature: request.profiles?.signature,
-                    status: 'APPROVED',
-                    date: request.created_at,
-                    comments: ''
+                  request.request_approvals?.forEach(log => {
+                    if (log.status?.toUpperCase() === 'APPROVED') {
+                      signatories.push({
+                        role: log.step_key?.replace(/_/g, ' ') || 'Signatory',
+                        name: log.profiles?.full_name,
+                        designation: log.profiles?.designations?.name,
+                        signature: log.profiles?.signature,
+                        date: log.acted_at,
+                        comments: log.comments
+                      });
+                    }
                   });
 
-                  // 2. Add Approvers
-                  steps.forEach(step => {
-                    const hist = approvals.filter(a => a.step_order === step.step_order);
-                    const latest = hist[hist.length - 1];
-                    if (!latest && step.step_order > currentStepOrder) return;
-                    
-                    signatories.push({
-                      role: step.role_label || step.designations?.name || 'Signatory',
-                      name: latest?.profiles?.full_name || (step.approver_id && step.profiles ? step.profiles.full_name : 'Await Decision'),
-                      designation: latest?.profiles?.designations?.name || step.profiles?.designations?.name || step.designations?.name || '',
-                      signature: latest?.profiles?.signature,
-                      status: latest?.status || 'PENDING',
-                      date: latest?.acted_at,
-                      comments: latest?.comments || ''
-                    });
-                  });
-
-                  // 3. Group by Role
-                  const groups: Record<string, any[]> = {};
-                  signatories.forEach(s => {
-                    if (!groups[s.role]) groups[s.role] = [];
-                    groups[s.role].push(s);
-                  });
-
-                  // 4. Sort Groups
-                  const sortedRoles = Object.keys(groups).sort((a, b) => {
-                    const idxA = roleOrder.indexOf(a);
-                    const idxB = roleOrder.indexOf(b);
-                    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-                    if (idxA !== -1) return -1;
-                    if (idxB !== -1) return 1;
-                    return a.localeCompare(b);
-                  });
-
-                  // 5. Render Groups
-                  return sortedRoles.map(role => `
-                    <div class="pdf-item" style="background: transparent;">
-                      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-                        <span style="font-size: 8px; font-weight: 900; color: #2563eb; text-transform: uppercase; letter-spacing: 1px; background: rgba(37,99,235,0.05); padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(37,99,235,0.1);">${role}</span>
-                        <div style="height: 1px; flex: 1; background: rgba(15,23,42,0.1); min-width: 10px;"></div>
+                  return signatories.map(s => `
+                    <div class="pdf-item" style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 175px; padding: 12px; background: #fff; border: 1.5px solid #f1f5f9; border-radius: 12px;">
+                      <div style="height: 55px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; width: 100%;">
+                        ${s.signature ? `<img src="${s.signature}" style="max-height: 50px; max-width: 130px; object-fit: contain; filter: grayscale(1) contrast(1.2);" />` : '<div style="border-bottom: 1.5px dashed #cbd5e1; width: 80%; margin-top: 25px;"></div>'}
                       </div>
-                      <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;">
-                        ${groups[role].map(s => `
-                          <div style="background: transparent; border: 1px solid rgba(15,23,42,0.08); border-radius: 8px; padding: 10px 8px; display: flex; flex-direction: column; gap: 4px; min-height: 70px; width: 172px; box-sizing: border-box; text-align: center; align-items: center;">
-                            <div style="width: 100%;">
-                              <p style="margin: 0; color: #0f172a; font-size: 10px; font-weight: 950; line-height: 1.1;">${s.name}</p>
-                              <p style="margin: 1px 0 0; color: #64748b; font-size: 7.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">${s.designation}</p>
-                            </div>
-                            
-                            ${s.signature ? `
-                              <div style="height: 30px; display: flex; align-items: center; justify-content: center; margin: 1px 0;">
-                                <img src="${s.signature}" style="max-height: 28px; max-width: 100%; object-fit: contain; filter: grayscale(1) contrast(1.1) brightness(0.9);" />
-                              </div>
-                            ` : `
-                              <div style="height: 30px; display: flex; align-items: center; justify-content: center; border: 1px dashed rgba(15,23,42,0.06); border-radius: 6px; margin: 1px 0; width: 100%;">
-                                <p style="margin: 0; color: #94a3b8; font-size: 6.5px; font-weight: 800; text-transform: uppercase;">Awaiting</p>
-                              </div>
-                            `}
-                            
-                            ${s.comments ? `
-                              <p style="margin: 0; color: #64748b; font-size: 7px; font-weight: 600; font-style: italic; line-height: 1.1; opacity: 0.8;">"${s.comments}"</p>
-                            ` : ''}
-
-                            <div style="margin-top: auto; padding-top: 4px; border-top: 1px solid rgba(0,0,0,0.04); display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                              <span style="font-size: 5.5px; color: #cbd5e1; font-weight: 800; letter-spacing: 0.5px;">UNIPORT AUTH</span>
-                              <span style="font-size: 6px; color: #94a3b8; font-weight: 800;">${s.date ? new Date(s.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '-- --'}</span>
-                            </div>
-                          </div>
-                        `).join('')}
-                      </div>
+                      <div style="width: 100%; height: 1.5px; background: rgba(15,23,42,0.1); margin-bottom: 8px;"></div>
+                      <p style="margin: 0; font-size: 11px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">${s.name}</p>
+                      <p style="margin: 2px 0; font-size: 9px; font-weight: 700; color: #64748b;">${s.designation}</p>
+                      <p style="margin: 4px 0; font-size: 8.5px; font-weight: 950; color: #3b82f6; text-transform: uppercase; letter-spacing: 1px;">${s.role}</p>
+                      ${s.comments ? `
+                        <div style="margin-top: 6px; padding: 5px; background: #f8fafc; border-radius: 4px; width: 100%;">
+                          <p style="margin: 0; font-size: 8px; color: #475569; font-style: italic; line-height: 1.2;">"${s.comments}"</p>
+                        </div>
+                      ` : ''}
+                      <p style="margin-top: 8px; font-size: 7px; color: #94a3b8; font-weight: 800;">${s.date ? new Date(s.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '--'} • SECURE AUTH</p>
                     </div>
                   `).join('');
                 })()}
-              </div>
             </div>
+          </div>
 
-            <!-- DOCUMENT FOOTER -->
-            <div style="margin-top: 50px; padding-top: 25px; border-top: 2.5px solid #0f172a; display: flex; justify-content: space-between; align-items: flex-end;">
-              <div style="max-width: 450px;">
-                <p style="margin: 0; color: #94a3b8; font-size: 8.5px; font-weight: 600; line-height: 1.5;">This institutional certificate is a secure electronic record generated by the UniPort Governance System. It is digitally authenticated and holds full validity without a physical signature under AIKTC Cluster regulations.</p>
-              </div>
-              <div style="text-align: right;">
-                <p style="margin: 0; color: #1e293b; font-size: 10px; font-weight: 900; letter-spacing: 0.5px;">Auth Date: ${new Date().toLocaleString('en-IN')}</p>
-                <p style="margin: 5px 0 0; color: #2563eb; font-size: 8.5px; font-weight: 900; letter-spacing: 1px;">SYSTEM BUILD: AIKTC-CERT-LTS-2026</p>
-              </div>
-            </div>
+          <div class="pdf-item" style="margin-top: 60px; padding-top: 25px; border-top: 1.5px solid #f1f5f9; text-align: center;">
+            <p style="margin: 0; font-size: 9px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 2px;">Digitally Authenticated Institutional Record</p>
+            <p style="margin: 4px 0; font-size: 8px; color: #cbd5e1; font-weight: 500;">AIKTC-CERT-LTS-2026 • Valid without physical seal</p>
           </div>
         </div>
       `;
