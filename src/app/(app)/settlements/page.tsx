@@ -862,7 +862,7 @@ function SettlementProcessInLine({ settlement, onClose, onDone, role }: any) {
               <div style={{ padding: '16px 20px', background: '#f8fafc', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                      <Wallet size={16} style={{ color: 'var(--accent)' }} />
-                     <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--midnight)' }}>ADVANCE PAYMENT LEDGER</span>
+                     <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--midnight)' }}>AMOUNT PAYMENT LEDGER</span>
                   </div>
                   <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--midnight)' }}>
                      Total Amount: <span style={{ color: 'var(--accent)' }}>₹{Number(settlement.advance_amount || 0).toLocaleString('en-IN')}</span>
