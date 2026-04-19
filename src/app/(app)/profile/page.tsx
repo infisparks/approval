@@ -1,6 +1,6 @@
 'use client';
 import { useRouter } from 'next/navigation';
-import { Mail, Briefcase, Building2, LogOut, MapPin, School, User } from 'lucide-react';
+import { Mail, Briefcase, Building2, LogOut, MapPin, School, User, Download, ExternalLink } from 'lucide-react';
 import AppShell from '@/components/AppShell';
 import { useAuth } from '@/lib/auth-context';
 import { signOut } from '@/lib/api';
@@ -74,6 +74,30 @@ export default function ProfilePage() {
           <InfoRow icon={<MapPin size={16} color="var(--emerald)" />} label="Institute Type" value={profile?.institute_types?.name ?? ''} />
           <InfoRow icon={<User size={16} color="var(--amber)" />} label="Staff Category" value={profile?.person_types?.name ?? ''} />
         </div>
+      </div>
+
+      {/* Actions Section */}
+      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid var(--border)', padding: '4px 0', marginBottom: 12 }}>
+        <button
+          id="download-approval-btn"
+          onClick={() => window.open('https://infispark.in', '_blank')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 14, width: '100%',
+            padding: '14px 18px', background: 'none', border: 'none', cursor: 'pointer',
+            textAlign: 'left',
+          }}
+        >
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(59,130,246,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Download size={18} color="var(--accent)" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--slate)' }}>Upload Approval</div>
+            <div style={{ fontSize: 12, color: 'var(--slate-light)' }}>upload your documents</div>
+          </div>
+          <div style={{ paddingRight: 4, color: 'var(--slate-light)' }}>
+            <ExternalLink size={14} />
+          </div>
+        </button>
       </div>
 
       {/* Sign out */}
