@@ -1,7 +1,8 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ShieldCheck, LayoutDashboard, Files, User, LogOut, X, BarChart3, Building, Receipt } from 'lucide-react';
+import Image from 'next/image';
+import { LayoutDashboard, Files, User, LogOut, X, BarChart3, Building, Receipt } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { signOut } from '@/lib/api';
 import { useRouter } from 'next/navigation';
@@ -35,8 +36,14 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
       <aside className={`sidebar ${open ? 'open' : ''}`}>
         {/* Brand */}
         <div className="sidebar-brand">
-          <div className="sidebar-logo">
-            <ShieldCheck size={22} />
+          <div className="sidebar-logo" style={{ background: '#fff', padding: 0, overflow: 'hidden', borderRadius: '50%' }}>
+            <Image 
+              src="/aiktc-logo.jpeg" 
+              alt="AIKTC Logo" 
+              width={44} 
+              height={44} 
+              className="object-cover"
+            />
           </div>
           <div>
             <div className="sidebar-title">ApproveIt</div>

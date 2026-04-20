@@ -41,16 +41,19 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="auth-page">
-      {/* Decorative orbs */}
-      <div className="auth-orb" style={{ width: 400, height: 400, background: '#3B82F6', top: -100, right: -100 }} />
-      <div className="auth-orb" style={{ width: 350, height: 350, background: '#10B981', bottom: -120, left: -80 }} />
+    <div className="auth-page" style={{ 
+      backgroundImage: 'linear-gradient(rgba(10, 15, 30, 0.8), rgba(10, 15, 30, 0.8)), url("/aiktc.png")',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundAttachment: 'fixed'
+    }}>
+      {/* Building background is set on parent div */}
 
       <div className="auth-card">
         {/* Logo */}
         <div className="auth-logo">
-          <div className="auth-logo-icon">
-            <ShieldCheck size={26} color="#fff" />
+          <div className="auth-logo-icon" style={{ background: '#fff', padding: 0, overflow: 'hidden', borderRadius: '50%', border: 'none' }}>
+            <img src="/aiktc-logo.jpeg" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
           <div>
             <div style={{ fontSize: 22, fontWeight: 900, color: '#fff', letterSpacing: -0.5 }}>ApproveIt</div>

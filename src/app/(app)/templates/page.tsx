@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { Files, Search, Plus, FileText, ArrowRight, Trash2, PlusCircle, X, CheckCircle2, Paperclip, Image as ImageIcon, File as FileIcon, AlertCircle } from 'lucide-react';
+import Image from 'next/image';
 import AppShell from '@/components/AppShell';
 import { getTemplates, getDesignations, proposeTemplate, createRequest, getCells, getPersonTypes, getProfiles, uploadAttachment } from '@/lib/api';
 import { ApprovalTemplate, Designation, Cell, PersonType, UserProfile } from '@/lib/types';
@@ -778,6 +779,18 @@ export default function TemplatesPage() {
   return (
     <AppShell
       title="Letter Templates"
+      center={
+        <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+          <Image 
+            src="/aiktc-bannerlogo.avif" 
+            alt="AIKTC Banner Logo" 
+            width={400} 
+            height={60} 
+            className="h-9 w-auto object-contain sm:h-11"
+            priority
+          />
+        </div>
+      }
       actions={
         profile?.is_admin && (
           <button id="propose-template-btn" className="topbar-btn topbar-btn-primary" onClick={() => setShowPropose(true)}>

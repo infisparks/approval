@@ -1,6 +1,7 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { Mail, Briefcase, Building2, LogOut, MapPin, School, User, Download, ExternalLink } from 'lucide-react';
+import Image from 'next/image';
 import AppShell from '@/components/AppShell';
 import { useAuth } from '@/lib/auth-context';
 import { signOut } from '@/lib/api';
@@ -29,7 +30,21 @@ export default function ProfilePage() {
   const initial = profile?.full_name?.[0]?.toUpperCase() ?? '?';
 
   return (
-    <AppShell title="My Profile">
+    <AppShell 
+      title="My Profile"
+      center={
+        <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+          <Image 
+            src="/aiktc-bannerlogo.avif" 
+            alt="AIKTC Banner Logo" 
+            width={400} 
+            height={60} 
+            className="h-9 w-auto object-contain sm:h-11"
+            priority
+          />
+        </div>
+      }
+    >
       {/* Hero */}
       <div className="profile-hero">
         <div style={{ position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: '50%', background: 'rgba(59,130,246,0.08)' }} />

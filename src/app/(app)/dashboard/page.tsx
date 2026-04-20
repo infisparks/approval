@@ -8,6 +8,7 @@ import {
   Download, RefreshCw, Info, User as UserIcon, History as HistoryIcon,
   Eye, Paperclip, ExternalLink
 } from 'lucide-react';
+import Image from 'next/image';
 import DownloadPDFButton from '@/components/DownloadPDFButton';
 import AppShell from '@/components/AppShell';
 import { useAuth } from '@/lib/auth-context';
@@ -1173,6 +1174,18 @@ export default function DashboardPage() {
   return (
     <AppShell
       title="Dashboard"
+      center={
+        <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+          <Image 
+            src="/aiktc-bannerlogo.avif" 
+            alt="AIKTC Banner Logo" 
+            width={400} 
+            height={60} 
+            className="h-9 w-auto object-contain sm:h-11"
+            priority
+          />
+        </div>
+      }
       actions={
         <div style={{ display: 'flex', gap: 10 }}>
           <button 
@@ -1190,7 +1203,11 @@ export default function DashboardPage() {
       }
     >
       {/* Welcome banner */}
-      <div className="relative overflow-hidden rounded-[20px] p-6 sm:p-8 mb-7 bg-gradient-to-br from-[#0f172a] to-[#1e293b]">
+      <div className="relative overflow-hidden rounded-[20px] p-6 sm:p-8 mb-7" style={{ 
+        backgroundImage: 'linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.6)), url("/aiktc.png")',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center'
+      }}>
         {/* Decorative elements */}
         <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5 blur-2xl" />
         <div className="absolute -bottom-8 -left-8 w-32 h-32 rounded-full bg-emerald-500/5 blur-2xl" />
