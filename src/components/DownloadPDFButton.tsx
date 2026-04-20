@@ -57,7 +57,7 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
       container.style.position = 'absolute';
       container.style.left = '-9999px';
       container.style.top = '0';
-      container.style.width = '850px';
+      container.style.width = '793.7px'; // Accurate A4 width in px (595.28pt * 96/72)
       container.style.backgroundColor = 'transparent';
       container.style.color = '#1e293b';
       container.style.fontFamily = "'Inter', system-ui, -apple-system, sans-serif";
@@ -163,8 +163,8 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
             <div class="pdf-item" style="background: #fff; border: 1.5px solid #e2e8f0; border-radius: 14px; padding: 25px; position: relative;">
                <div style="position: absolute; top: -10px; left: 20px; background: #0f172a; color: #fff; padding: 4px 12px; border-radius: 6px; font-size: 9px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase;">Executive Statement</div>
                <h3 style="margin: 0 0 15px; font-size: 16px; font-weight: 850; color: #0f172a; line-height: 1.3;">${request.content?.subject || 'Re: Application for Approval'}</h3>
-               <div style="color: #334155; font-size: 12px; line-height: 1.6; white-space: pre-wrap; font-weight: 450;">
-                 ${(request.content?.body || 'No detailed content provided.').split('\n').map((p: string) => p.trim() ? `<div class="pdf-item" style="margin-bottom: 12px;">${p}</div>` : '<div style="height: 10px;"></div>').join('')}
+               <div style="color: #334155; font-size: 12px; line-height: 1.6; white-space: pre-wrap; font-weight: 450; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word;">
+                 ${(request.content?.body || 'No detailed content provided.').split('\n').map((p: string) => p.trim() ? `<div class="pdf-item" style="margin-bottom: 12px; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word;">${p}</div>` : '<div style="height: 10px;"></div>').join('')}
                </div>
             </div>
           </div>
@@ -211,36 +211,92 @@ export default function DownloadPDFButton({ request }: DownloadPDFButtonProps) {
             
             <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 25px; padding: 0 10px;">
                 ${(() => {
-                  const signatories: any[] = [];
-                  
-                  request.request_approvals?.forEach(log => {
-                    if (log.status?.toUpperCase() === 'APPROVED') {
-                      signatories.push({
-                        role: log.step_key?.replace(/_/g, ' ') || 'Signatory',
-                        name: log.profiles?.full_name,
-                        designation: log.profiles?.designations?.name,
-                        signature: log.profiles?.signature,
-                        date: log.acted_at,
-                        comments: log.comments
-                      });
-                    }
-                  });
+                   const signatories: any[] = [];
+                   
+                   // 1. Add Requester (PREPARED BY)
+                   if (request.profiles) {
+                     signatories.push({
+                       role: request.approval_templates?.requester_role_label || 'PREPARED BY',
+                       name: request.profiles.full_name,
+                       designation: request.profiles.designations?.name,
+                       signature: request.profiles.signature,
+                       date: request.created_at,
+                       comments: null,
+                       status: 'COMPLETED'
+                     });
+                   }
+                   
+                   // 2. Add Required Approval Steps (Verified by, Recommended by, etc.)
+                   // We use the 'steps' variable defined above (line 76) which already filters by amount/rank
+                   steps.forEach(step => {
+                     // Find the latest approval for this step order
+                     const log = request.request_approvals?.find(l => l.step_order === step.step_order && l.status?.toUpperCase() === 'APPROVED');
+                     
+                     if (log) {
+                       signatories.push({
+                         role: step.role_label || log.step_key?.replace(/_/g, ' ') || 'Signatory',
+                         name: log.profiles?.full_name,
+                         designation: log.profiles?.designations?.name,
+                         signature: log.profiles?.signature,
+                         date: log.acted_at,
+                         comments: log.comments,
+                         status: 'APPROVED'
+                       });
+                     } else {
+                       // Placeholder for pending/current step
+                       signatories.push({
+                         role: step.role_label || 'PENDING APPROVAL',
+                         name: step.profiles?.full_name || 'Authorized Signatory',
+                         designation: step.profiles?.designations?.name || step.designations?.name || 'Pending Action',
+                         signature: null,
+                         date: null,
+                         comments: null,
+                         status: 'PENDING'
+                       });
+                     }
+                   });
 
-                  return signatories.map(s => `
-                    <div class="pdf-item" style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 175px; padding: 12px; background: #fff; border: 1.5px solid #f1f5f9; border-radius: 12px;">
-                      <div style="height: 55px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; width: 100%;">
-                        ${s.signature ? `<img src="${s.signature}" style="max-height: 50px; max-width: 130px; object-fit: contain; filter: grayscale(1) contrast(1.2);" />` : '<div style="border-bottom: 1.5px dashed #cbd5e1; width: 80%; margin-top: 25px;"></div>'}
+                   const groupedSignatories: Record<string, any[]> = signatories.reduce((acc, s) => {
+                     if (!acc[s.role]) acc[s.role] = [];
+                     acc[s.role].push(s);
+                     return acc;
+                   }, {} as Record<string, any[]>);
+
+                   return Object.entries(groupedSignatories).map(([role, list]) => `
+                    <div class="pdf-item" style="background: #fff; border: 1.5px solid #e2e8f0; border-radius: 14px; width: 100%; max-width: 710px; display: flex; flex-direction: column; overflow: hidden; margin-bottom: 25px;">
+                      <!-- Group Header with Role -->
+                      <div style="background: #f8fafc; padding: 12px 20px; border-bottom: 1.5px solid #e2e8f0;">
+                        <p style="margin: 0; color: #475569; font-size: 10px; font-weight: 1000; text-transform: uppercase; letter-spacing: 2px;">${role}</p>
                       </div>
-                      <div style="width: 100%; height: 1.5px; background: rgba(15,23,42,0.1); margin-bottom: 8px;"></div>
-                      <p style="margin: 0; font-size: 11px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">${s.name}</p>
-                      <p style="margin: 2px 0; font-size: 9px; font-weight: 700; color: #64748b;">${s.designation}</p>
-                      <p style="margin: 4px 0; font-size: 8.5px; font-weight: 950; color: #3b82f6; text-transform: uppercase; letter-spacing: 1px;">${s.role}</p>
-                      ${s.comments ? `
-                        <div style="margin-top: 6px; padding: 5px; background: #f8fafc; border-radius: 4px; width: 100%;">
-                          <p style="margin: 0; font-size: 8px; color: #475569; font-style: italic; line-height: 1.2;">"${s.comments}"</p>
-                        </div>
-                      ` : ''}
-                      <p style="margin-top: 8px; font-size: 7px; color: #94a3b8; font-weight: 800;">${s.date ? new Date(s.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '--'} • SECURE AUTH</p>
+                      
+                      <div style="padding: 20px 15px; display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; align-items: flex-start;">
+                        ${list.map(s => `
+                          <div style="width: 155px; display: flex; flex-direction: column; align-items: center; text-align: center; opacity: ${s.status === 'PENDING' ? '0.6' : '1'};">
+                            <!-- Signature Area -->
+                            <div style="height: 55px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; width: 100%;">
+                              ${s.signature ? `<img src="${s.signature}" style="max-height: 50px; max-width: 145px; object-fit: contain; filter: grayscale(1) contrast(1.2);" />` : `<div style="border-bottom: 1.5px dashed #cbd5e1; width: 80%; margin-top: 25px; height: 1px;"></div>`}
+                            </div>
+                            
+                            <!-- Decision Details -->
+                            <div style="width: 100%; border-top: 1.5px solid #f1f5f9; padding-top: 10px;">
+                              <p style="margin: 0; font-size: 10.5px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.2px; overflow-wrap: break-word; line-height: 1.2;">${s.name}</p>
+                              <p style="margin: 2px 0; font-size: 8.5px; font-weight: 700; color: #64748b; overflow-wrap: break-word; line-height: 1.2;">${s.designation}</p>
+                              
+                              ${s.comments ? `
+                                <div style="margin-top: 6px; padding: 4px; background: #f8fafc; border-radius: 4px; width: 100%; border: 1px solid #f1f5f9; text-align: left;">
+                                  <p style="margin: 0; font-size: 7.5px; color: #475569; font-style: italic; line-height: 1.2; overflow-wrap: break-word;">"${s.comments}"</p>
+                                </div>
+                              ` : ''}
+                              
+                              <div style="margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                                <p style="margin: 0; font-size: 7px; color: #94a3b8; font-weight: 900; text-transform: uppercase;">
+                                  ${s.date ? new Date(s.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'PENDING'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        `).join('')}
+                      </div>
                     </div>
                   `).join('');
                 })()}
