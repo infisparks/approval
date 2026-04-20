@@ -135,6 +135,7 @@ export interface ApprovalRequest {
   settlement_requests?: SettlementRequest[];
   attachments?: string[];
   ref_no?: string;
+  is_urgent?: boolean;
 }
 
 export interface AcademicYear {

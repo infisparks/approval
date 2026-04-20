@@ -30,7 +30,8 @@ export async function sendWhatsAppNotification(
   facultyName: string,
   heading: string,
   date: string,
-  link: string
+  link: string,
+  isUrgent: boolean = false
 ): Promise<void> {
   if (!contactNumber) {
     console.warn("⚠️ WhatsApp ignored: Missing contact number");
@@ -42,7 +43,7 @@ export async function sendWhatsAppNotification(
     return;
   }
 
-  const messageText = `*Approval Request Pending* 📝\n\nHello,\nAn approval request is waiting for your review.\n\n*Subject:* ${heading}\n*Faculty:* ${facultyName}\n*Date:* ${date}\n\n*Review Link:* ${link}\n\n_Sent via Institutional Approval System_`;
+  const messageText = `*${isUrgent ? '🚨 URGENT ' : ''}Approval Request Pending* 📝\n\nHello,\nAn approval request is waiting for your review.${isUrgent ? '\n\n*STATUS:* 🚨 URGENT' : ''}\n\n*Subject:* ${heading}\n*Faculty:* ${facultyName}\n*Date:* ${date}\n\n*Review Link:* ${link}\n\n_Sent via Institutional Approval System_`;
 
   try {
     const payload = {
@@ -429,7 +430,8 @@ export async function getRequestsByRequester(): Promise<ApprovalRequest[]> {
 export async function createRequest(
   templateId: string, title: string, content: Record<string, string>,
   cellId: string, hasAmount = false, amount = 0.0,
-  bifurcation: any = null, budgetProvisions = true, attachments: string[] = []
+  bifurcation: any = null, budgetProvisions = true, attachments: string[] = [],
+  isUrgent = false
 ): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('User not authenticated');
@@ -463,12 +465,18 @@ export async function createRequest(
   const { error } = await supabase.from('approval_requests').insert({
     template_id: templateId, requester_id: user.id, cell_id: cellId, title, content,
     current_step_id: currentStepId || null, status: isFullyApproved ? 'approved' : 'pending',
-    has_amount: hasAmount, amount, bifurcation, budget_provisions: budgetProvisions, attachments
+    has_amount: hasAmount, amount, bifurcation, budget_provisions: budgetProvisions, attachments,
+    is_urgent: isUrgent
   });
   if (error) throw error;
 }
 
-export async function approveRequest(requestId: string, stepOrder: number, comments: string): Promise<void> {
+export async function approveRequest(
+  requestId: string,
+  stepOrder: number,
+  comments: string,
+  isUrgent?: boolean
+): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
@@ -508,6 +516,7 @@ export async function approveRequest(requestId: string, stepOrder: number, comme
   const { error: updateError } = await supabase.from('approval_requests').update({
     current_step_id: nextStep ? nextStep.id : req.current_step_id,
     status: nextStep ? 'pending' : 'approved',
+    is_urgent: isUrgent !== undefined ? isUrgent : req.is_urgent
   }).eq('id', requestId);
   if (updateError) throw updateError;
 
@@ -516,7 +525,7 @@ export async function approveRequest(requestId: string, stepOrder: number, comme
     const link = `${baseUrl}/admin/requests`;
     if (nextStep.approver_id) {
        const p = await getProfileById(nextStep.approver_id);
-       if (p?.number) await sendWhatsAppNotification(p.number, req.profiles?.full_name || 'Faculty', req.title, new Date().toLocaleDateString('en-IN'), link);
+       if (p?.number) await sendWhatsAppNotification(p.number, req.profiles?.full_name || 'Faculty', req.title, new Date().toLocaleDateString('en-IN'), link, req.is_urgent);
     }
   }
 }

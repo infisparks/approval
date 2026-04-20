@@ -113,11 +113,13 @@ function MediaViewer({ url, onClose }: { url: string; onClose: () => void }) {
 function ApprovalModal({
   req, onClose, onDone,
 }: { req: ApprovalRequest; onClose: () => void; onDone: () => void }) {
+  const { profile: currentUser } = useAuth();
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [showRevisions, setShowRevisions] = useState(false);
   const [viewingMedia, setViewingMedia] = useState<string | null>(null);
+  const [isUrgent, setIsUrgent] = useState(req.is_urgent);
 
   const allSteps = req.approval_templates?.template_steps?.sort((a, b) => a.step_order - b.step_order) || [];
   const requesterRank = (req.profiles?.designations as any)?.rank || 0;
@@ -136,6 +138,10 @@ function ApprovalModal({
   const currentStepOrder = currentStepObj?.step_order || 0;
   const actionableSteps = steps.filter(s => s.step_order <= currentStepOrder);
 
+  const isAccountantStep = currentUser?.designations?.name?.toLowerCase().includes('account') ||
+                           currentStepObj?.role_label?.toLowerCase().includes('account') || 
+                           currentStepObj?.role_label?.toLowerCase().includes('deputy chief accountant');
+
   const act = async (action: 'approve' | 'reject' | 'revert') => {
     if (action === 'revert' && !comment.trim()) {
       setError('Please add a comment when reverting.'); return;
@@ -143,7 +149,7 @@ function ApprovalModal({
     setError('');
     setLoading(action);
     try {
-      if (action === 'approve') await approveRequest(req.id, currentStepOrder, comment);
+      if (action === 'approve') await approveRequest(req.id, currentStepOrder, comment, isUrgent);
       else if (action === 'reject') await rejectRequest(req.id, currentStepOrder, comment);
       else await revertRequest(req.id, currentStepOrder, comment);
       onDone();
@@ -164,7 +170,10 @@ function ApprovalModal({
             <span className={`badge ${statusBgClass('pending')}`}>PENDING REVIEW</span>
             <span className="badge badge-accent" style={{ fontSize: 10 }}>{req.template_name ?? req.approval_templates?.name}</span>
           </div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: -0.5, marginBottom: 4 }}>{req.title}</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: -0.5, marginBottom: 4 }}>
+            {req.is_urgent && <span style={{ color: '#fda4af', marginRight: 8 }}>🚨 URGENT:</span>}
+            {req.title}
+          </div>
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)' }}>From {req.requester_name ?? req.profiles?.full_name}</div>
           
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 12 }}>
@@ -194,6 +203,13 @@ function ApprovalModal({
                 <span style={{ fontSize: 10, fontWeight: 900, color: 'var(--emerald)', letterSpacing: 0.5 }}>REVISED & UPDATED</span>
               </div>
             )}
+
+            {req.is_urgent && (
+              <div style={{ padding: '6px 12px', background: 'rgba(244,63,94,0.2)', borderRadius: 10, border: '1px solid rgba(244,63,94,0.3)', display: 'flex', alignItems: 'center', gap: 6, animation: 'pulse 2s infinite' }}>
+                <AlertCircle size={12} color="#fff" />
+                <span style={{ fontSize: 10, fontWeight: 900, color: '#fff', letterSpacing: 1 }}>HIGH PRIORITY</span>
+              </div>
+            )}
           </div>
         </div>
         
@@ -204,6 +220,13 @@ function ApprovalModal({
           <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', padding: 18, marginBottom: 16 }}>
             <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', letterSpacing: 1, marginBottom: 6 }}>SUBJECT</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--midnight)', marginBottom: 14 }}>{req.content?.subject ?? req.title}</div>
+            
+            <div style={{ height: 1, background: 'var(--border)', marginBottom: 14 }} />
+            
+            <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--slate)', letterSpacing: 1, marginBottom: 8 }}>LETTER BODY</div>
+            <div style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--slate)', whiteSpace: 'pre-wrap' }}>
+              {req.content?.body ?? 'No body provided.'}
+            </div>
             
             <div style={{ height: 1, background: 'var(--border)', marginBottom: 14 }} />
             
@@ -400,6 +423,24 @@ function ApprovalModal({
             </div>
           </div>
 
+          {isAccountantStep && (
+            <div style={{ background: isUrgent ? 'rgba(239, 68, 68, 0.05)' : 'var(--surface)', borderRadius: 12, border: `1px solid ${isUrgent ? 'rgba(239, 68, 68, 0.15)' : 'var(--border)'}`, padding: '14px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: isUrgent ? 'rgba(239, 68, 68, 0.1)' : 'rgba(107, 114, 128, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <AlertCircle size={16} color={isUrgent ? 'var(--rose)' : 'var(--slate)'} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: isUrgent ? 'var(--rose)' : 'var(--midnight)' }}>Change Urgent Status?</div>
+                    <div style={{ fontSize: 11, color: 'var(--slate)' }}>Uncheck if this request should no longer be marked as high priority.</div>
+                  </div>
+               </div>
+               <label className="switch">
+                  <input type="checkbox" checked={isUrgent} onChange={e => setIsUrgent(e.target.checked)} />
+                  <span className="switch-slider" style={{ backgroundColor: isUrgent ? 'var(--rose)' : '' }} />
+                </label>
+            </div>
+          )}
+
           {/* Comment */}
           <div className="field-group" style={{ marginBottom: 0 }}>
             <label className="field-label">Remarks / Feedback</label>
@@ -475,7 +516,10 @@ function RequestDetailModal({
             </div>
             <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: '#fff', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>✕ Close</button>
           </div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: -0.5, marginBottom: 4 }}>{req.title}</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: -0.5, marginBottom: 4 }}>
+            {req.is_urgent && <span style={{ color: '#fda4af', marginRight: 8 }}>🚨 URGENT:</span>}
+            {req.title}
+          </div>
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)' }}>{req.template_name ?? req.approval_templates?.name}</div>
           {req.has_amount && (
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
@@ -493,6 +537,12 @@ function RequestDetailModal({
                   BUDGET {req.budget_provisions ? 'PROVISIONED' : 'NOT PROVISIONED'}
                 </span>
               </div>
+              {req.is_urgent && (
+                <div style={{ padding: '6px 12px', background: 'rgba(244,63,94,0.2)', borderRadius: 10, border: '1px solid rgba(244,63,94,0.3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <AlertCircle size={12} color="#fff" />
+                  <span style={{ fontSize: 10, fontWeight: 900, color: '#fff', letterSpacing: 1 }}>URGENT</span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -796,10 +846,17 @@ function EmptyState({ message, icon }: { message: string; icon: React.ReactNode 
 
 function ActionCard({ req, onClick }: { req: ApprovalRequest; onClick: () => void }) {
   return (
-    <div className="request-card" onClick={onClick} style={{ borderLeft: '3px solid var(--gold)' }}>
+    <div className={`request-card ${req.is_urgent ? 'urgent-glow' : ''}`} onClick={onClick} style={{ 
+      borderLeft: req.is_urgent ? '4px solid var(--rose)' : '3px solid var(--gold)',
+      position: 'relative',
+      overflow: 'hidden'
+    }}>
+      {req.is_urgent && (
+        <div style={{ position: 'absolute', top: 0, right: 0, background: 'var(--rose)', color: '#fff', fontSize: 8, fontWeight: 900, padding: '2px 8px', borderRadius: '0 0 0 8px', letterSpacing: 1, zIndex: 10 }}>URGENT</div>
+      )}
       <div className="request-card-row">
-        <div className="request-icon" style={{ background: 'rgba(245,158,11,0.1)' }}>
-          <FileSignature size={18} color="var(--gold)" />
+        <div className="request-icon" style={{ background: req.is_urgent ? 'rgba(244,63,94,0.1)' : 'rgba(245,158,11,0.1)' }}>
+          <FileSignature size={18} color={req.is_urgent ? 'var(--rose)' : 'var(--gold)'} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -852,6 +909,7 @@ function SignedCard({ req, onClick }: { req: ApprovalRequest; onClick: () => voi
     </div>
   );
 }
+
 
 function MyRequestCard({ req, onClick }: { req: ApprovalRequest; onClick: () => void }) {
   const allSteps = req.approval_templates?.template_steps?.sort((a, b) => a.step_order - b.step_order) || [];
@@ -910,7 +968,15 @@ function MyRequestCard({ req, onClick }: { req: ApprovalRequest; onClick: () => 
   };
 
   return (
-    <div className="request-card" onClick={onClick} style={{ borderLeft: `3px solid ${statusColor(req.status)}` }}>
+    <div className={`request-card ${req.is_urgent ? 'urgent-glow' : ''}`} onClick={onClick} style={{ 
+      borderLeft: `3px solid ${req.is_urgent ? 'var(--rose)' : statusColor(req.status)}`,
+      position: 'relative',
+      overflow: 'hidden'
+    }}>
+      {req.is_urgent && (
+        <div style={{ position: 'absolute', top: 0, right: 0, background: 'var(--rose)', color: '#fff', fontSize: 8, fontWeight: 900, padding: '2px 8px', borderRadius: '0 0 0 8px', letterSpacing: 1, zIndex: 10 }}>URGENT</div>
+      )}
+      
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12, gap: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="request-title" style={{ marginBottom: 4 }}>{req.title}</div>
@@ -1077,8 +1143,15 @@ export default function DashboardPage() {
       ];
       
       const results = await Promise.all(fetchers);
-      setMyReqs(results[0]);
-      setPending(results[1]);
+      
+      const sortByUrgent = (a: ApprovalRequest, b: ApprovalRequest) => {
+        if (a.is_urgent && !b.is_urgent) return -1;
+        if (!a.is_urgent && b.is_urgent) return 1;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      };
+
+      setMyReqs(results[0].sort(sortByUrgent));
+      setPending(results[1].sort(sortByUrgent));
       setSigned(results[2]);
     } finally { setLoadingData(false); }
   }, [isApprover]);

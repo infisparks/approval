@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { Files, Search, Plus, FileText, ArrowRight, Trash2, PlusCircle, X, CheckCircle2, Paperclip, Image as ImageIcon, File as FileIcon } from 'lucide-react';
+import { Files, Search, Plus, FileText, ArrowRight, Trash2, PlusCircle, X, CheckCircle2, Paperclip, Image as ImageIcon, File as FileIcon, AlertCircle } from 'lucide-react';
 import AppShell from '@/components/AppShell';
 import { getTemplates, getDesignations, proposeTemplate, createRequest, getCells, getPersonTypes, getProfiles, uploadAttachment } from '@/lib/api';
 import { ApprovalTemplate, Designation, Cell, PersonType, UserProfile } from '@/lib/types';
@@ -100,6 +100,7 @@ function ComposeModal({ template, onClose, onDone }: { template: ApprovalTemplat
   const [attachments, setAttachments] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [viewingMedia, setViewingMedia] = useState<string | null>(null);
+  const [isUrgent, setIsUrgent] = useState(false);
 
   useEffect(() => {
     if (profile?.institute_id) {
@@ -182,7 +183,8 @@ function ComposeModal({ template, onClose, onDone }: { template: ApprovalTemplat
         hasAmount ? parseFloat(amount) || 0 : 0,
         hasAmount ? bifurcation : null,
         budgetProvisions ?? true,
-        attachments
+        attachments,
+        isUrgent
       );
       onDone(); onClose();
     } catch (e: unknown) {
@@ -402,6 +404,22 @@ function ComposeModal({ template, onClose, onDone }: { template: ApprovalTemplat
                     }}
                   >NO</button>
                </div>
+            </div>
+          </div>
+          
+          {/* Urgent Request Toggle */}
+          <div style={{ background: isUrgent ? 'rgba(239, 68, 68, 0.05)' : 'var(--surface)', borderRadius: 12, border: `1px solid ${isUrgent ? 'rgba(239, 68, 68, 0.2)' : 'var(--border)'}`, padding: '16px 18px', marginBottom: 16, transition: 'all 0.2s' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+               <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: isUrgent ? 'var(--rose)' : 'var(--midnight)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {isUrgent && <AlertCircle size={14} />} Urgent Request?
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--slate)' }}>Mark this request as high priority for immediate attention.</div>
+               </div>
+               <label className="switch">
+                <input type="checkbox" checked={isUrgent} onChange={e => setIsUrgent(e.target.checked)} />
+                <span className="switch-slider" style={{ backgroundColor: isUrgent ? 'var(--rose)' : '' }} />
+              </label>
             </div>
           </div>
 
