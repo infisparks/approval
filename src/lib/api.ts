@@ -521,7 +521,7 @@ export async function approveRequest(
   if (updateError) throw updateError;
 
   if (nextStep) {
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://approval.infispark.in';
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://approval-three.vercel.app/';
     const link = `${baseUrl}/admin/requests`;
     if (nextStep.approver_id) {
        const p = await getProfileById(nextStep.approver_id);
