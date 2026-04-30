@@ -61,7 +61,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <h1 className="auth-heading">Welcome<br />Back</h1>
+        <h1 className="auth-heading">Welcome</h1>
         <p className="auth-sub">Sign in to access your approval portal.</p>
 
         {error && <div className="auth-error">{error}</div>}
